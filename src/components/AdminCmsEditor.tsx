@@ -8,6 +8,7 @@ import {
   CopyPlus,
   Edit3,
   FileText,
+  FileUp,
   ImagePlus,
   LayoutTemplate,
   PanelBottom,
@@ -16,6 +17,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
+import { PdfTemplateImportModal } from './PdfTemplateImportModal';
 import type {
   CustomFieldType,
   CustomTemplateField,
@@ -128,6 +130,9 @@ export function AdminCmsEditor({
   const [fieldNameInput, setFieldNameInput] = useState('');
   const [fieldTypeInput, setFieldTypeInput] = useState<CustomFieldType>('text');
 
+  // PDF Import Modal State
+  const [pdfImportModalOpen, setPdfImportModalOpen] = useState(false);
+
   const detectedFields = useMemo(
     () => extractTemplateFields(content, customFields),
     [content, customFields]
@@ -162,6 +167,30 @@ export function AdminCmsEditor({
     setCustomFields([]);
     setEditorMode('edit');
     setFeedback(null);
+  }
+
+  function handleOpenExtractedTemplate(data: {
+    title: string;
+    content: string;
+    notice?: string;
+  }) {
+    setIsNewMode(true);
+    setSelectedId('');
+    setTitle(data.title);
+    setCategory('Documento Importado');
+    setContent(data.content);
+    setIsDefault(false);
+    setCustomFields([]);
+    setEditorMode('edit');
+    setFeedback(data.notice ?? null);
+  }
+
+  async function handleApplyLetterheadUpdates(
+    updates: Partial<Omit<LetterheadSettings, 'updatedAt' | 'updatedBy'>>
+  ) {
+    const next = { ...lhForm, ...updates };
+    setLhForm(next);
+    await onSaveLetterhead(next);
   }
 
   function duplicateTemplate(tpl: DocumentTemplate) {
@@ -846,14 +875,24 @@ export function AdminCmsEditor({
             </button>
 
             {editorMode === 'list' && (
-              <button
-                type="button"
-                onClick={openNewTemplateEditor}
-                className="min-h-[48px] px-5 py-2.5 rounded-xl bg-[#0B1D3A] text-white text-sm font-semibold hover:bg-[#132B52] inline-flex items-center gap-2 whitespace-nowrap"
-              >
-                <Plus className="w-4 h-4" aria-hidden="true" />
-                Novo Modelo de Documento
-              </button>
+              <div className="flex flex-wrap items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setPdfImportModalOpen(true)}
+                  className="min-h-[48px] px-4 py-2.5 rounded-xl border border-[#B8934A] bg-[#F7F1E3]/60 text-[#0B1D3A] text-sm font-semibold hover:bg-[#F7F1E3] inline-flex items-center gap-2 whitespace-nowrap"
+                >
+                  <FileUp className="w-4 h-4 text-[#9A7835]" aria-hidden="true" />
+                  Importar de PDF
+                </button>
+                <button
+                  type="button"
+                  onClick={openNewTemplateEditor}
+                  className="min-h-[48px] px-5 py-2.5 rounded-xl bg-[#0B1D3A] text-white text-sm font-semibold hover:bg-[#132B52] inline-flex items-center gap-2 whitespace-nowrap"
+                >
+                  <Plus className="w-4 h-4" aria-hidden="true" />
+                  Novo Modelo de Documento
+                </button>
+              </div>
             )}
           </div>
 
@@ -1172,6 +1211,14 @@ export function AdminCmsEditor({
           </div>
         </div>
       )}
+
+      {/* MODAL: IMPORT TEMPLATE FROM PDF */}
+      <PdfTemplateImportModal
+        isOpen={pdfImportModalOpen}
+        onClose={() => setPdfImportModalOpen(false)}
+        onOpenExtractedTemplate={handleOpenExtractedTemplate}
+        onApplyLetterheadUpdates={handleApplyLetterheadUpdates}
+      />
     </div>
   );
 }
