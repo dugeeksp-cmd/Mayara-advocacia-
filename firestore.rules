@@ -180,12 +180,12 @@ service cloud.firestore {
     }
 
     function isValidSignatureConfig(data) {
-      return data.keys().hasAll(['defaultProvider', 'clicksignEnabled', 'docusignEnabled', 'govbrEnabled', 'updatedAt', 'updatedBy']) &&
-        data.keys().hasOnly(['defaultProvider', 'clicksignEnabled', 'docusignEnabled', 'govbrEnabled', 'officeId', 'updatedAt', 'updatedBy']) &&
-        data.defaultProvider in ['clicksign', 'docusign'] &&
-        data.clicksignEnabled is bool &&
-        data.docusignEnabled is bool &&
+      return data.keys().hasAll(['govbrEnabled', 'govbrPortalUrl', 'requireSignedUpload', 'updatedAt', 'updatedBy']) &&
+        data.keys().hasOnly(['govbrEnabled', 'govbrPortalUrl', 'instructionsNote', 'requireSignedUpload', 'officeId', 'updatedAt', 'updatedBy']) &&
         data.govbrEnabled is bool &&
+        data.govbrPortalUrl is string && data.govbrPortalUrl.size() >= 8 && data.govbrPortalUrl.size() <= 200 &&
+        (!('instructionsNote' in data) || (data.instructionsNote is string && data.instructionsNote.size() <= 500)) &&
+        data.requireSignedUpload is bool &&
         (!('officeId' in data) || isOfficeScoped(data)) &&
         data.updatedAt is timestamp &&
         data.updatedBy is string && data.updatedBy.size() >= 1 && data.updatedBy.size() <= 128;
@@ -272,7 +272,7 @@ service cloud.firestore {
         isValidId(data.templateId) &&
         data.templateTitle is string && data.templateTitle.size() >= 2 && data.templateTitle.size() <= 140 &&
         data.status in ['pendente', 'assinando', 'concluido'] &&
-        data.signatureMethod in ['none', 'govbr', 'clicksign', 'docusign'] &&
+        data.signatureMethod in ['none', 'govbr'] &&
         (!('signatureEnvelopeId' in data) || data.signatureEnvelopeId == null || (data.signatureEnvelopeId is string && data.signatureEnvelopeId.size() <= 128)) &&
         (!('signatureAuditHash' in data) || data.signatureAuditHash == null || (data.signatureAuditHash is string && data.signatureAuditHash.size() <= 128)) &&
         (!('signedPdfUrl' in data) || data.signedPdfUrl == null || (data.signedPdfUrl is string && data.signedPdfUrl.size() <= 2000)) &&

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   DEFAULT_TEMPLATES,
   PROCURACAO_TEXT,
+  buildSampleTemplateValues,
   extractTemplateFields,
   generateTagFromFieldName,
   insertTextAtCursor,
@@ -84,4 +85,23 @@ test('extractTemplateFields enriches saved customFields with configured type and
   assert.equal(fields.length, 2);
   assert.equal(fields[1].type, 'date');
   assert.equal(fields[1].label, 'Data de Vencimento');
+});
+
+test('buildSampleTemplateValues populates standard and custom placeholders for test PDF preview', () => {
+  const content =
+    'Outorgante {{NOME_COMPLETO}}, CPF {{CPF}}, valor {{VALOR_CAUSA}}, objeto [CAMPO: Objeto].';
+  const customFields = [
+    {
+      key: 'VALOR_CAUSA',
+      tag: '{{VALOR_CAUSA}}',
+      label: 'Valor da Causa',
+      fieldType: 'number' as const,
+    },
+  ];
+  const samples = buildSampleTemplateValues(content, customFields);
+  const rendered = interpolateTemplate(content, samples, new Date(2026, 10, 24), customFields);
+  assert.ok(!rendered.includes('{{'));
+  assert.ok(!rendered.includes('[CAMPO:'));
+  assert.ok(rendered.includes('1.500,00'));
+  assert.ok(rendered.includes('[Exemplo: Objeto]'));
 });

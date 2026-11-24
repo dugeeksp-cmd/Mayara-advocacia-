@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlignCenter,
   AlignLeft,
@@ -6,11 +6,14 @@ import {
   ArrowLeft,
   Check,
   CopyPlus,
+  Download,
   Edit3,
+  Eye,
   FileText,
   FileUp,
   ImagePlus,
   LayoutTemplate,
+  Loader2,
   PanelBottom,
   Plus,
   Save,
@@ -40,18 +43,22 @@ import type {
 import { sanitizeFilenamePart } from '../utils/masksAndFormatters';
 import {
   AVAILABLE_TAGS_FOR_EDITOR,
+  buildSampleTemplateValues,
   extractTemplateFields,
   generateTagFromFieldName,
   insertTextAtCursor,
+  interpolateTemplate,
 } from '../utils/templateEngine';
 import {
   getFontOption,
   getSizeOption,
   normalizeHexColor,
+  resolveTemplateTimbrado,
   TIMBRADO_COLOR_SWATCHES,
   TIMBRADO_FONT_OPTIONS,
   TIMBRADO_SIZE_OPTIONS,
 } from '../utils/timbradoTheme';
+import { generateLegalDocumentPdf, triggerBlobDownload } from '../utils/pdfGenerator';
 
 type CmsView = 'hub' | 'header' | 'footer' | 'images' | 'templates';
 
@@ -219,6 +226,18 @@ export function AdminCmsEditor({
 
   // PDF Import Modal State
   const [pdfImportModalOpen, setPdfImportModalOpen] = useState(false);
+
+  // Test PDF Preview State
+  const [generatingTestPdf, setGeneratingTestPdf] = useState(false);
+  const [testPdfPreview, setTestPdfPreview] = useState<{
+    fileName: string;
+    blob: Blob;
+    documentTitle: string;
+    renderedText: string;
+    header: HeaderProfile | null;
+    footer: FooterProfile | null;
+    logo: LogoAsset | null;
+  } | null>(null);
 
   const defaultLogo = useMemo(
     () => logos.find((l) => l.isDefault) || logos[0] || null,
@@ -600,6 +619,62 @@ export function AdminCmsEditor({
       setFeedback('Modelo de documento salvo e sincronizado na nuvem.');
     } finally {
       setSavingTpl(false);
+    }
+  }
+
+  function closeTestPdfPreview() {
+    setTestPdfPreview(null);
+  }
+
+  async function handlePreviewTestPdf() {
+    if (!content.trim()) return;
+    setGeneratingTestPdf(true);
+    setFeedback(null);
+    try {
+      const sampleValues = buildSampleTemplateValues(content, customFields);
+      const renderedText = interpolateTemplate(content, sampleValues, new Date(), customFields);
+      const draftTemplate: DocumentTemplate = {
+        id: selectedId || 'preview_draft',
+        title: title.trim() || 'Modelo de Documento (Teste)',
+        category: category.trim() || 'Geral',
+        content,
+        isDefault,
+        customFields,
+        headerId: fromSelectValue(tplHeaderSelect),
+        footerId: fromSelectValue(tplFooterSelect),
+        logoId: fromSelectValue(tplLogoSelect),
+        ownerUid: 'preview',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      const { header, footer, logo } = resolveTemplateTimbrado({
+        template: draftTemplate,
+        headers,
+        footers,
+        logos,
+        fallbackLetterhead: letterhead,
+      });
+      const artifact = await generateLegalDocumentPdf({
+        documentTitle: draftTemplate.title,
+        renderedText,
+        letterhead,
+        header,
+        footer,
+        logo,
+        clientName: 'Cliente_Exemplo',
+      });
+      triggerBlobDownload(artifact.blob, artifact.fileName);
+      setTestPdfPreview({
+        fileName: artifact.fileName,
+        blob: artifact.blob,
+        documentTitle: draftTemplate.title,
+        renderedText,
+        header,
+        footer,
+        logo,
+      });
+    } finally {
+      setGeneratingTestPdf(false);
     }
   }
 
@@ -1757,6 +1832,20 @@ export function AdminCmsEditor({
                       </div>
 
                       <div className="flex flex-wrap items-center gap-2 shrink-0">
+                        {!tpl.isDefault && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void onSaveTemplate({ ...tpl, isDefault: true }).then(() =>
+                                setFeedback(`"${tpl.title}" definido como modelo padrão.`)
+                              )
+                            }
+                            className="min-h-[44px] px-3.5 py-2 rounded-xl border border-slate-300 bg-white text-[#9A7835] text-xs sm:text-sm font-semibold hover:bg-slate-50 inline-flex items-center gap-1.5"
+                          >
+                            <Star className="w-3.5 h-3.5" aria-hidden="true" />
+                            Padrão
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => openTemplateForEdit(tpl)}
@@ -1942,14 +2031,35 @@ export function AdminCmsEditor({
                     Definir como modelo padrão ao gerar links
                   </label>
 
-                  <button
-                    type="submit"
-                    disabled={savingTpl}
-                    className="min-h-[48px] px-6 py-2.5 rounded-xl bg-[#0B1D3A] text-white text-sm font-semibold hover:bg-[#132B52] disabled:opacity-60 inline-flex items-center gap-2"
-                  >
-                    <Save className="w-4 h-4" aria-hidden="true" />
-                    {savingTpl ? 'Salvando...' : 'Salvar Modelo'}
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <button
+                      type="button"
+                      disabled={generatingTestPdf || !content.trim()}
+                      onClick={() => void handlePreviewTestPdf()}
+                      className="min-h-[48px] px-4 py-2.5 rounded-xl border border-[#B8934A] bg-[#F7F1E3]/60 text-[#0B1D3A] text-sm font-semibold hover:bg-[#F7F1E3] disabled:opacity-60 inline-flex items-center gap-2"
+                    >
+                      {generatingTestPdf ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+                          Gerando Prévia...
+                        </>
+                      ) : (
+                        <>
+                          <Eye className="w-4 h-4 text-[#9A7835]" aria-hidden="true" />
+                          Visualizar PDF de Teste
+                        </>
+                      )}
+                    </button>
+
+                    <button
+                      type="submit"
+                      disabled={savingTpl}
+                      className="min-h-[48px] px-6 py-2.5 rounded-xl bg-[#0B1D3A] text-white text-sm font-semibold hover:bg-[#132B52] disabled:opacity-60 inline-flex items-center gap-2"
+                    >
+                      <Save className="w-4 h-4" aria-hidden="true" />
+                      {savingTpl ? 'Salvando...' : 'Salvar Modelo'}
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -2114,6 +2224,166 @@ export function AdminCmsEditor({
         onSaveExtractedFooter={onSaveFooter}
         onSaveExtractedLogo={onSaveLogo}
       />
+
+      {/* MODAL: PREVIEW SAMPLE TEST PDF */}
+      {testPdfPreview && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center p-4 sm:py-8 bg-[#0B1D3A]/60 overflow-y-auto"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="test-pdf-preview-title"
+        >
+          <div className="w-full max-w-3xl bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 shadow-xl my-auto flex flex-col gap-4">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-[#9A7835]">
+                  Pré-visualização A4 com Dados de Exemplo · PDF Baixado
+                </p>
+                <h3
+                  id="test-pdf-preview-title"
+                  className="font-display text-lg sm:text-xl font-bold text-[#0B1D3A]"
+                >
+                  {testPdfPreview.documentTitle}
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5 font-mono">{testPdfPreview.fileName}</p>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() =>
+                    triggerBlobDownload(testPdfPreview.blob, testPdfPreview.fileName)
+                  }
+                  className="min-h-[42px] px-4 py-2 rounded-xl bg-[#0B1D3A] text-white text-xs sm:text-sm font-semibold hover:bg-[#132B52] inline-flex items-center gap-1.5"
+                >
+                  <Download className="w-4 h-4" aria-hidden="true" />
+                  Baixar PDF de Teste
+                </button>
+                <button
+                  type="button"
+                  aria-label="Fechar pré-visualização do PDF"
+                  onClick={closeTestPdfPreview}
+                  className="min-h-[42px] min-w-[42px] rounded-lg flex items-center justify-center text-slate-500 hover:bg-slate-100"
+                >
+                  <X className="w-4 h-4" aria-hidden="true" />
+                </button>
+              </div>
+            </div>
+
+            {/* Rendered A4 Paper Sheet Preview */}
+            <div className="bg-slate-100 border border-slate-200 rounded-xl p-4 sm:p-6 max-h-[68vh] overflow-y-auto">
+              <div className="bg-white border border-slate-300 shadow-sm max-w-[660px] mx-auto overflow-hidden">
+                <div className="h-2 bg-[#0B1D3A]" />
+
+                {testPdfPreview.header && (
+                  <div
+                    className={`px-8 pt-6 pb-4 ${
+                      testPdfPreview.header.alignment === 'left'
+                        ? 'text-left'
+                        : testPdfPreview.header.alignment === 'right'
+                          ? 'text-right'
+                          : 'text-center'
+                    }`}
+                    style={{
+                      fontFamily: getFontOption(testPdfPreview.header.fontFamily).cssFamily,
+                    }}
+                  >
+                    {testPdfPreview.logo?.dataUrl && (
+                      <img
+                        src={testPdfPreview.logo.dataUrl}
+                        alt={testPdfPreview.logo.name}
+                        className={`h-12 w-auto object-contain mb-3 ${
+                          testPdfPreview.header.alignment === 'center'
+                            ? 'mx-auto'
+                            : testPdfPreview.header.alignment === 'right'
+                              ? 'ml-auto'
+                              : ''
+                        }`}
+                      />
+                    )}
+                    <p
+                      className="font-bold uppercase leading-snug"
+                      style={{
+                        fontSize: `${getSizeOption(testPdfPreview.header.textSize).headerTitleCssPx}px`,
+                        color: normalizeHexColor(testPdfPreview.header.textColor, '#0B1D3A'),
+                      }}
+                    >
+                      {testPdfPreview.header.officeTitle}
+                    </p>
+                    <p
+                      className="font-semibold text-[#9A7835] mt-1"
+                      style={{
+                        fontSize: `${getSizeOption(testPdfPreview.header.textSize).headerSubCssPx}px`,
+                      }}
+                    >
+                      {testPdfPreview.header.oabNumber}
+                      {testPdfPreview.header.subtitle
+                        ? ` | ${testPdfPreview.header.subtitle}`
+                        : ''}
+                    </p>
+                    <div className="h-0.5 bg-[#B8934A] mt-4" />
+                  </div>
+                )}
+
+                {!testPdfPreview.header && testPdfPreview.logo?.dataUrl && (
+                  <div className="px-8 pt-6 pb-2 text-center">
+                    <img
+                      src={testPdfPreview.logo.dataUrl}
+                      alt={testPdfPreview.logo.name}
+                      className="h-12 w-auto object-contain mx-auto"
+                    />
+                  </div>
+                )}
+
+                <div className="px-8 py-6 space-y-4">
+                  <h4 className="text-center font-serif text-base font-bold uppercase tracking-wide text-[#0B1D3A]">
+                    {testPdfPreview.documentTitle}
+                  </h4>
+
+                  <div className="space-y-3 text-xs sm:text-[13px] leading-relaxed text-slate-800 whitespace-pre-wrap text-justify font-serif">
+                    {testPdfPreview.renderedText}
+                  </div>
+
+                  <div className="pt-4">
+                    <div className="border border-dashed border-slate-400 rounded-md p-3 text-center text-[11px] text-slate-500">
+                      Área reservada para Assinatura Eletrônica Gov.br (assinador.iti.br)
+                    </div>
+                  </div>
+                </div>
+
+                {testPdfPreview.footer && (
+                  <div
+                    className={`px-8 py-4 border-t border-slate-200 bg-slate-50/50 ${
+                      testPdfPreview.footer.alignment === 'left'
+                        ? 'text-left'
+                        : testPdfPreview.footer.alignment === 'right'
+                          ? 'text-right'
+                          : 'text-center'
+                    }`}
+                    style={{
+                      fontFamily: getFontOption(testPdfPreview.footer.fontFamily).cssFamily,
+                      fontSize: `${getSizeOption(testPdfPreview.footer.textSize).footerCssPx}px`,
+                      color: normalizeHexColor(testPdfPreview.footer.textColor, '#475569'),
+                    }}
+                  >
+                    <p>{testPdfPreview.footer.addressFooter}</p>
+                    <p className="mt-0.5">
+                      {[
+                        testPdfPreview.footer.phone ? `Tel: ${testPdfPreview.footer.phone}` : '',
+                        testPdfPreview.footer.email,
+                        testPdfPreview.footer.instagram,
+                        testPdfPreview.footer.website,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

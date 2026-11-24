@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Menu } from 'lucide-react';
 import type {
   ClientRecord,
@@ -9,14 +9,16 @@ import type {
   LogoAsset,
   ServiceLink,
   SignatureConfigSettings,
-  SignatureServerConfig,
 } from '../types/legal';
 import {
   dataService,
   subscribeToSyncState,
   type CloudSyncState,
 } from '../services/dataService';
-import { fetchSignatureServerConfig } from '../services/signatureApi';
+import {
+  buildUnifiedClientEntries,
+  type UnifiedClientEntry,
+} from '../utils/legalFieldOptions';
 import {
   DEFAULT_FOOTERS,
   DEFAULT_HEADERS,
@@ -29,6 +31,8 @@ import { AdminLinksManager } from './AdminLinksManager';
 import { AdminClientsView } from './AdminClientsView';
 import { AdminCmsEditor } from './AdminCmsEditor';
 import { AdminSignatureSettings } from './AdminSignatureSettings';
+import { AdminClientSummaryModal } from './AdminClientSummaryModal';
+import { AdminClientManualModal } from './AdminClientManualModal';
 
 interface AdminDashboardProps {
   mode: 'firebase' | 'local';
@@ -61,10 +65,16 @@ export function AdminDashboard({
   const [syncState, setSyncState] = useState<CloudSyncState>('cloud');
 
   const [signatureConfig, setSignatureConfig] = useState<SignatureConfigSettings | null>(null);
-  const [signatureServerConfig, setSignatureServerConfig] = useState<SignatureServerConfig | null>(
-    null
-  );
   const [loading, setLoading] = useState(true);
+
+  // Shared Unified Client Summary & Manual Registration Modal state (accessible from Clientes and Documentos Recebidos)
+  const [summaryKey, setSummaryKey] = useState<string | null>(null);
+  const [manualModalOpen, setManualModalOpen] = useState(false);
+  const [editingClient, setEditingClient] = useState<ClientRecord | null>(null);
+  const [prefillName, setPrefillName] = useState('');
+  const [prefillWhatsapp, setPrefillWhatsapp] = useState('');
+  const [defaultGeneratePdf, setDefaultGeneratePdf] = useState<boolean | undefined>(undefined);
+  const [clientFeedback, setClientFeedback] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -73,13 +83,12 @@ export function AdminDashboard({
     async function init() {
       setLoading(true);
       await dataService.ensureSeedData();
-      const [hdrs, ftrs, lgs, tpls, sigCfg, serverCfg] = await Promise.all([
+      const [hdrs, ftrs, lgs, tpls, sigCfg] = await Promise.all([
         dataService.getHeaders(),
         dataService.getFooters(),
         dataService.getLogos(),
         dataService.getTemplates(),
         dataService.getSignatureConfig(),
-        fetchSignatureServerConfig().catch(() => null),
       ]);
       if (!active) return;
 
@@ -88,7 +97,6 @@ export function AdminDashboard({
       setLogos(lgs);
       setTemplates(tpls);
       setSignatureConfig(sigCfg);
-      setSignatureServerConfig(serverCfg);
       setLoading(false);
 
       unsubs.push(
@@ -148,9 +156,47 @@ export function AdminDashboard({
     }
   }, [headers, footers, logos]);
 
+  const unifiedEntries = useMemo(
+    () => buildUnifiedClientEntries(clients, links),
+    [clients, links]
+  );
+
+  const selectedSummaryEntry = useMemo(
+    () => unifiedEntries.find((e) => e.key === summaryKey) || null,
+    [unifiedEntries, summaryKey]
+  );
+
+  function handleOpenNewManualClientModal() {
+    setEditingClient(null);
+    setPrefillName('');
+    setPrefillWhatsapp('');
+    setDefaultGeneratePdf(true);
+    setManualModalOpen(true);
+  }
+
+  function handleEditOrCompleteClient(entry: UnifiedClientEntry, generatePdfAfter = false) {
+    setSummaryKey(null);
+    setEditingClient(entry.clientRecord);
+    setPrefillName(entry.displayName);
+    setPrefillWhatsapp(entry.whatsapp);
+    setDefaultGeneratePdf(generatePdfAfter);
+    setManualModalOpen(true);
+  }
+
+  function handleOpenClientSummaryByLink(link: ServiceLink) {
+    const match = unifiedEntries.find((entry) =>
+      entry.linkedDocs.some((doc) => doc.tokenId === link.tokenId)
+    );
+    if (match) {
+      setSummaryKey(match.key);
+      return;
+    }
+    const bucketKey = `link:${link.clientName.trim().toLowerCase()}|${link.whatsapp.replace(/\D/g, '').slice(-11)}`;
+    setSummaryKey(bucketKey);
+  }
+
   const pendingCount = links.filter((l) => l.status !== 'concluido').length;
   const completedCount = links.filter((l) => l.status === 'concluido').length;
-  const totalClientsCount = Math.max(clients.length, links.length);
 
   return (
     <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
@@ -158,7 +204,7 @@ export function AdminDashboard({
         isOpen={drawerOpen}
         activeSection={activeSection}
         documentsCount={links.length}
-        clientsCount={totalClientsCount}
+        clientsCount={unifiedEntries.length}
         onClose={() => setDrawerOpen(false)}
         onSelectSection={setActiveSection}
       />
@@ -229,22 +275,16 @@ export function AdminDashboard({
               onDeleteLink={async (link) => {
                 await dataService.deleteServiceLink(link);
               }}
+              onOpenClientSummary={handleOpenClientSummaryByLink}
             />
           )}
 
           {activeSection === 'clients' && (
             <AdminClientsView
-              clients={clients}
-              links={links}
-              templates={templates}
-              headers={headers}
-              footers={footers}
-              logos={logos}
-              letterhead={letterhead}
-              onSaveClient={async (input) => dataService.saveClient(input)}
-              onCreateAtendimentoForClient={async (input) => {
-                await dataService.createServiceLink(input);
-              }}
+              unifiedEntries={unifiedEntries}
+              feedback={clientFeedback}
+              onOpenSummary={(key) => setSummaryKey(key)}
+              onOpenNewClient={handleOpenNewManualClientModal}
             />
           )}
 
@@ -273,7 +313,6 @@ export function AdminDashboard({
           {activeSection === 'signature' && signatureConfig && (
             <AdminSignatureSettings
               signatureConfig={signatureConfig}
-              signatureServerConfig={signatureServerConfig}
               onSaveSignatureConfig={async (cfg) => {
                 const saved = await dataService.saveSignatureConfig(cfg);
                 setSignatureConfig(saved);
@@ -282,6 +321,42 @@ export function AdminDashboard({
           )}
         </>
       )}
+
+      {/* Unified Client Summary & Document History Modal (shared by Clientes & Documentos Recebidos) */}
+      <AdminClientSummaryModal
+        entry={selectedSummaryEntry}
+        templates={templates}
+        headers={headers}
+        footers={footers}
+        logos={logos}
+        letterhead={letterhead}
+        onClose={() => setSummaryKey(null)}
+        onEditOrCompleteClient={handleEditOrCompleteClient}
+        onCreateAtendimentoForClient={async (input) => {
+          await dataService.createServiceLink(input);
+        }}
+      />
+
+      {/* Unified Manual Client Registration / Edit Modal with CPF Primary Lookup */}
+      <AdminClientManualModal
+        isOpen={manualModalOpen}
+        editingClient={editingClient}
+        existingClients={clients}
+        prefillName={prefillName}
+        prefillWhatsapp={prefillWhatsapp}
+        defaultGeneratePdf={defaultGeneratePdf}
+        templates={templates}
+        headers={headers}
+        footers={footers}
+        logos={logos}
+        letterhead={letterhead}
+        onClose={() => setManualModalOpen(false)}
+        onSaveClient={async (input) => dataService.saveClient(input)}
+        onCreateAtendimentoForClient={async (input) => {
+          await dataService.createServiceLink(input);
+        }}
+        onSuccessFeedback={(msg) => setClientFeedback(msg)}
+      />
     </main>
   );
 }

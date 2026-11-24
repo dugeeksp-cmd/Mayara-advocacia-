@@ -14,16 +14,19 @@ import { formatDateTimeBR } from '../utils/masksAndFormatters';
 interface AdminLinksManagerProps {
   links: ServiceLink[];
   onDeleteLink: (link: ServiceLink) => Promise<void>;
+  onOpenClientSummary: (link: ServiceLink) => void;
 }
 
 const METHOD_LABELS: Record<ServiceLink['signatureMethod'], string> = {
   none: 'Não iniciada',
   govbr: 'Gov.br',
-  clicksign: 'Clicksign',
-  docusign: 'DocuSign',
 };
 
-export function AdminLinksManager({ links, onDeleteLink }: AdminLinksManagerProps) {
+export function AdminLinksManager({
+  links,
+  onDeleteLink,
+  onOpenClientSummary,
+}: AdminLinksManagerProps) {
   const [filter, setFilter] = useState<'all' | ServiceLinkStatus>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -72,7 +75,8 @@ export function AdminLinksManager({ links, onDeleteLink }: AdminLinksManagerProp
             Gestão de Documentos e Links
           </h2>
           <p className="text-sm text-slate-600">
-            Acompanhamento em tempo real de links emitidos e PDFs assinados recebidos.
+            Acompanhamento em tempo real de links emitidos e PDFs assinados recebidos. Clique no
+            nome do cliente para abrir o resumo completo e adicionar documentos.
           </p>
         </div>
 
@@ -146,9 +150,13 @@ export function AdminLinksManager({ links, onDeleteLink }: AdminLinksManagerProp
               >
                 <div className="min-w-0 space-y-1">
                   <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-                    <h3 className="text-base font-semibold text-[#0B1D3A] truncate">
+                    <button
+                      type="button"
+                      onClick={() => onOpenClientSummary(link)}
+                      className="text-left text-base font-semibold text-[#0B1D3A] hover:text-[#9A7835] hover:underline truncate transition-colors"
+                    >
                       {link.clientName}
-                    </h3>
+                    </button>
                     <span className="text-slate-300" aria-hidden="true">
                       ·
                     </span>

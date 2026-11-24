@@ -4,7 +4,6 @@ import type {
   HeaderProfile,
   LetterheadSettings,
   LogoAsset,
-  SignatureProvider,
 } from '../types/legal';
 import { sanitizeFilenamePart, sha256Hex } from './masksAndFormatters';
 import {
@@ -315,7 +314,7 @@ export async function generateLegalDocumentPdf(params: {
   doc.setFontSize(8);
   doc.setTextColor(100, 116, 139);
   doc.text(
-    'Área reservada para Assinatura Eletrônica (Gov.br / Clicksign / DocuSign)',
+    'Área reservada para Assinatura Eletrônica Gov.br (assinador.iti.br)',
     pageWidth / 2,
     cursorY + 5,
     { align: 'center' }
@@ -339,167 +338,6 @@ export async function generateLegalDocumentPdf(params: {
   const safeDoc = sanitizeFilenamePart(documentTitle);
   const safeClient = sanitizeFilenamePart(clientName);
   const fileName = `${safeDoc}_${safeClient}.pdf`;
-
-  return {
-    blob,
-    arrayBuffer,
-    fileName,
-    sha256,
-  };
-}
-
-/**
- * Generates an electronically signed PDF containing the original document content
- * plus an embedded MP 2.200-2/2001 digital signature seal & audit certificate.
- */
-export async function generateSignedDocumentPdf(params: {
-  documentTitle: string;
-  renderedText: string;
-  letterhead?: LetterheadSettings;
-  header?: HeaderProfile | null;
-  footer?: FooterProfile | null;
-  logo?: LogoAsset | null;
-  clientName: string;
-  provider: SignatureProvider;
-  envelopeId: string;
-  documentHash: string;
-  auditHash: string;
-  signedAtIso: string;
-  signatureDataUrl?: string;
-}): Promise<GeneratedPdfArtifact> {
-  const {
-    documentTitle,
-    renderedText,
-    letterhead,
-    clientName,
-    provider,
-    envelopeId,
-    documentHash,
-    auditHash,
-    signedAtIso,
-    signatureDataUrl,
-  } = params;
-
-  const resolvedHeader =
-    params.header !== undefined ? params.header : legacyHeaderFromLetterhead(letterhead);
-  const resolvedFooter =
-    params.footer !== undefined ? params.footer : legacyFooterFromLetterhead(letterhead);
-  const resolvedLogo =
-    params.logo !== undefined ? params.logo : legacyLogoFromLetterhead(letterhead);
-
-  const doc = new jsPDF({
-    orientation: 'portrait',
-    unit: 'mm',
-    format: 'a4',
-    compress: true,
-  });
-
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
-  const marginX = 22;
-  const contentWidth = pageWidth - marginX * 2;
-  const maxBodyY = pageHeight - 36;
-
-  let cursorY = drawResolvedHeader(doc, resolvedHeader, resolvedLogo, pageWidth, marginX);
-
-  doc.setFont('times', 'bold');
-  doc.setFontSize(14);
-  doc.setTextColor(11, 29, 58);
-  doc.text(documentTitle.toUpperCase(), pageWidth / 2, cursorY + 4, { align: 'center' });
-  cursorY += 15;
-
-  const paragraphs = renderedText.split(/\n\s*\n/);
-  for (const rawParagraph of paragraphs) {
-    const paragraph = rawParagraph.replace(/\s+/g, ' ').trim();
-    if (!paragraph) continue;
-
-    const matchedPrefix = BOLD_PREFIXES.find((prefix) => paragraph.startsWith(prefix));
-    doc.setFont('times', 'normal');
-    doc.setFontSize(11);
-    doc.setTextColor(15, 23, 42);
-
-    const lines = doc.splitTextToSize(paragraph, contentWidth) as string[];
-    const blockHeight = lines.length * 5.6 + 4;
-
-    if (cursorY + blockHeight > maxBodyY) {
-      drawResolvedFooter(doc, resolvedFooter, letterhead, pageWidth, pageHeight, marginX);
-      doc.addPage();
-      cursorY = drawResolvedHeader(doc, resolvedHeader, resolvedLogo, pageWidth, marginX);
-    }
-
-    if (matchedPrefix && lines.length > 0) {
-      const colonIdx = lines[0].indexOf(':');
-      if (colonIdx > 0 && colonIdx <= 24) {
-        const prefixText = lines[0].slice(0, colonIdx + 1);
-        const restFirstLine = lines[0].slice(colonIdx + 1);
-        doc.setFont('times', 'bold');
-        doc.text(prefixText, marginX, cursorY);
-        const prefixWidth = doc.getTextWidth(prefixText);
-        doc.setFont('times', 'normal');
-        doc.text(restFirstLine, marginX + prefixWidth, cursorY);
-        cursorY += 5.6;
-        for (let i = 1; i < lines.length; i++) {
-          doc.text(lines[i], marginX, cursorY);
-          cursorY += 5.6;
-        }
-        cursorY += 4.5;
-        continue;
-      }
-    }
-
-    for (const line of lines) {
-      doc.text(line, marginX, cursorY);
-      cursorY += 5.6;
-    }
-    cursorY += 4.5;
-  }
-
-  // Embedded Electronic Signature Block
-  if (cursorY + 52 > maxBodyY) {
-    drawResolvedFooter(doc, resolvedFooter, letterhead, pageWidth, pageHeight, marginX);
-    doc.addPage();
-    cursorY = drawResolvedHeader(doc, resolvedHeader, resolvedLogo, pageWidth, marginX) + 6;
-  } else {
-    cursorY += 8;
-  }
-
-  const providerLabel = provider === 'clicksign' ? 'Clicksign' : 'DocuSign';
-  doc.setFillColor(247, 248, 250);
-  doc.setDrawColor(11, 29, 58);
-  doc.setLineWidth(0.5);
-  doc.roundedRect(marginX, cursorY, contentWidth, 42, 2, 2, 'FD');
-
-  if (signatureDataUrl && signatureDataUrl.startsWith('data:image/png')) {
-    try {
-      doc.addImage(signatureDataUrl, 'PNG', marginX + 6, cursorY + 4, 48, 16);
-    } catch {
-      // Skip image embedding if malformed
-    }
-  }
-
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9);
-  doc.setTextColor(11, 29, 58);
-  doc.text(`ASSINADO ELETRONICAMENTE VIA ${providerLabel.toUpperCase()}`, marginX + 60, cursorY + 8);
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  doc.setTextColor(51, 65, 85);
-  doc.text(`Signatário: ${clientName.toUpperCase()}`, marginX + 60, cursorY + 14);
-  doc.text(`Envelope ID: ${envelopeId}`, marginX + 60, cursorY + 19);
-  doc.text(`Data/Hora UTC: ${signedAtIso}`, marginX + 60, cursorY + 24);
-  doc.text(`Hash Original (SHA-256): ${documentHash.slice(0, 36)}...`, marginX + 6, cursorY + 31);
-  doc.text(`Hash Auditoria (MP 2.200-2/2001): ${auditHash.slice(0, 36)}...`, marginX + 6, cursorY + 36);
-
-  drawResolvedFooter(doc, resolvedFooter, letterhead, pageWidth, pageHeight, marginX);
-
-  const arrayBuffer = doc.output('arraybuffer');
-  const blob = new Blob([arrayBuffer], { type: 'application/pdf' });
-  const sha256 = await sha256Hex(arrayBuffer);
-
-  const safeDoc = sanitizeFilenamePart(documentTitle);
-  const safeClient = sanitizeFilenamePart(clientName);
-  const fileName = `${safeDoc}_${safeClient}_ASSINADO_${providerLabel.toUpperCase()}.pdf`;
 
   return {
     blob,

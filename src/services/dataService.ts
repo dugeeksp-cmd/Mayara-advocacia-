@@ -43,6 +43,7 @@ import {
   DEFAULT_LOGOS,
   OFFICE_SCOPE_ID,
 } from '../utils/timbradoTheme';
+import { findClientByCpf as findClientByCpfInList } from '../utils/legalFieldOptions';
 import { auth, db, storage } from './firebaseConfig';
 
 export type PersistenceMode = 'firebase' | 'local';
@@ -354,7 +355,7 @@ function mapServiceLinkDoc(data: Record<string, unknown>): ServiceLink {
     templateId: String(data.templateId),
     templateTitle: String(data.templateTitle),
     status: (data.status as ServiceLinkStatus) || 'pendente',
-    signatureMethod: (data.signatureMethod as SignatureMethod) || 'none',
+    signatureMethod: data.signatureMethod === 'govbr' ? 'govbr' : 'none',
     signatureEnvelopeId:
       typeof data.signatureEnvelopeId === 'string' ? data.signatureEnvelopeId : null,
     signatureAuditHash:
@@ -472,10 +473,10 @@ export const dataService = {
         const sigSnap = await getDoc(sigRef);
         if (!sigSnap.exists()) {
           await setDoc(sigRef, {
-            defaultProvider: DEFAULT_SIGNATURE_CONFIG.defaultProvider,
-            clicksignEnabled: DEFAULT_SIGNATURE_CONFIG.clicksignEnabled,
-            docusignEnabled: DEFAULT_SIGNATURE_CONFIG.docusignEnabled,
             govbrEnabled: DEFAULT_SIGNATURE_CONFIG.govbrEnabled,
+            govbrPortalUrl: DEFAULT_SIGNATURE_CONFIG.govbrPortalUrl,
+            instructionsNote: DEFAULT_SIGNATURE_CONFIG.instructionsNote ?? '',
+            requireSignedUpload: DEFAULT_SIGNATURE_CONFIG.requireSignedUpload,
             officeId: OFFICE_SCOPE_ID,
             updatedAt: serverTimestamp(),
             updatedBy: uid,
@@ -1016,10 +1017,17 @@ export const dataService = {
       if (!snap.exists()) return readCache(CACHE_KEYS.signatureConfig, DEFAULT_SIGNATURE_CONFIG);
       const d = snap.data();
       const mapped: SignatureConfigSettings = {
-        defaultProvider: d.defaultProvider,
-        clicksignEnabled: Boolean(d.clicksignEnabled),
-        docusignEnabled: Boolean(d.docusignEnabled),
-        govbrEnabled: Boolean(d.govbrEnabled),
+        govbrEnabled: d.govbrEnabled !== undefined ? Boolean(d.govbrEnabled) : true,
+        govbrPortalUrl:
+          typeof d.govbrPortalUrl === 'string' && d.govbrPortalUrl.length >= 8
+            ? d.govbrPortalUrl
+            : DEFAULT_SIGNATURE_CONFIG.govbrPortalUrl,
+        instructionsNote:
+          typeof d.instructionsNote === 'string'
+            ? d.instructionsNote
+            : DEFAULT_SIGNATURE_CONFIG.instructionsNote,
+        requireSignedUpload:
+          d.requireSignedUpload !== undefined ? Boolean(d.requireSignedUpload) : true,
         officeId: d.officeId || OFFICE_SCOPE_ID,
         updatedAt: toIsoString(d.updatedAt),
         updatedBy: d.updatedBy || 'office_admin',
@@ -1046,10 +1054,10 @@ export const dataService = {
 
     try {
       await setDoc(doc(db, 'settings', 'signatureConfig'), {
-        defaultProvider: config.defaultProvider,
-        clicksignEnabled: config.clicksignEnabled,
-        docusignEnabled: config.docusignEnabled,
         govbrEnabled: config.govbrEnabled,
+        govbrPortalUrl: config.govbrPortalUrl.trim() || DEFAULT_SIGNATURE_CONFIG.govbrPortalUrl,
+        instructionsNote: (config.instructionsNote || '').trim(),
+        requireSignedUpload: config.requireSignedUpload,
         officeId: OFFICE_SCOPE_ID,
         updatedAt: serverTimestamp(),
         updatedBy: uid,
@@ -1144,9 +1152,12 @@ export const dataService = {
       updatedAt: nowIso,
     };
 
-    const nextList = cached.some((t) => t.id === saved.id)
+    let nextList = cached.some((t) => t.id === saved.id)
       ? cached.map((t) => (t.id === saved.id ? saved : t))
       : [...cached, saved];
+    if (saved.isDefault) {
+      nextList = nextList.map((t) => ({ ...t, isDefault: t.id === saved.id }));
+    }
     writeCache(CACHE_KEYS.templates, nextList);
     notifyLocal(localTemplateListeners, nextList);
 
@@ -1181,6 +1192,21 @@ export const dataService = {
           ownerUid: uid,
           createdAt: serverTimestamp(),
         });
+      }
+
+      // Enforce exclusive single default template across all templates in Firestore
+      if (saved.isDefault) {
+        const allSnap = await getDocs(scopedQuery('templates'));
+        await Promise.all(
+          allSnap.docs
+            .filter((d) => d.id !== saved.id && d.data().isDefault)
+            .map((d) =>
+              updateDoc(doc(db, 'templates', d.id), {
+                isDefault: false,
+                updatedAt: serverTimestamp(),
+              })
+            )
+        );
       }
       setSyncState('cloud');
     } catch (err) {
@@ -1463,13 +1489,36 @@ export const dataService = {
     };
   },
 
+  async findClientByCpf(cpfInput: string): Promise<ClientRecord | null> {
+    const cached = readCache<ClientRecord[]>(CACHE_KEYS.clients, []);
+    try {
+      const snap = await getDocs(scopedQuery('clients'));
+      setSyncState('cloud');
+      const list = sortByCreatedDesc(
+        snap.docs.map((d) => mapClientDoc(d.data() as Record<string, unknown>))
+      );
+      if (list.length > 0) {
+        writeCache(CACHE_KEYS.clients, list);
+      }
+      return findClientByCpfInList(list.length > 0 ? list : cached, cpfInput);
+    } catch {
+      setSyncState('fallback');
+      return findClientByCpfInList(cached, cpfInput);
+    }
+  },
+
   async saveClient(input: SaveClientInput): Promise<ClientRecord> {
     const uid = actorId();
     const nowIso = new Date().toISOString();
     const cached = readCache<ClientRecord[]>(CACHE_KEYS.clients, []);
-    const existing = cached.find((c) => c.id === input.id);
+    const byId = cached.find((c) => c.id === input.id);
+    const byCpf = !byId && input.cpf ? findClientByCpfInList(cached, input.cpf) : null;
+    const existing = byId || byCpf || undefined;
+    const resolvedId = existing?.id || input.id;
+
     const saved: ClientRecord = {
       ...input,
+      id: resolvedId,
       officeId: OFFICE_SCOPE_ID,
       createdAt: existing?.createdAt || input.createdAt || nowIso,
       updatedAt: nowIso,

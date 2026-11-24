@@ -44,7 +44,7 @@ export function HomePortal({
             </h2>
             <p className="text-sm sm:text-base text-slate-600 leading-relaxed mb-6">
               Recebeu um link ou código de atendimento? Preencha seus dados no seu próprio aparelho,
-              gere o PDF timbrado e assine digitalmente via Clicksign, DocuSign ou Gov.br.
+              gere o PDF timbrado e assine digitalmente pelo portal oficial Gov.br.
             </p>
           </div>
           <button
@@ -97,9 +97,9 @@ export function HomePortal({
           <div className="flex items-start gap-3">
             <FileCheck2 className="w-5 h-5 text-[#9A7835] shrink-0 mt-0.5" aria-hidden="true" />
             <div>
-              <p className="font-semibold text-[#0B1D3A] mb-1">Assinatura Integrada ou Gov.br</p>
+              <p className="font-semibold text-[#0B1D3A] mb-1">Assinatura Digital via Gov.br</p>
               <p className="leading-relaxed">
-                Escolha assinar na própria tela via Clicksign/DocuSign ou pelo assinador oficial Gov.br.
+                Assinatura gratuita com validade jurídica pelo portal oficial assinador.iti.br ou App Gov.br.
               </p>
             </div>
           </div>

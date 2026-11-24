@@ -1,3 +1,12 @@
+import type {
+  ClientRecord,
+  DocumentTemplate,
+  ServiceLink,
+  ServiceLinkStatus,
+  TemplateTagField,
+} from '../types/legal';
+import { extractTemplateFields } from './templateEngine';
+
 export const MARITAL_STATUS_OPTIONS = [
   { value: 'solteiro(a)', label: 'Solteiro(a)' },
   { value: 'casado(a)', label: 'Casado(a)' },
@@ -87,6 +96,19 @@ export function normalizePhoneDigits(value: string): string {
   return value.replace(/\D/g, '').slice(-11);
 }
 
+export function normalizeCpfDigits(value: string): string {
+  return value.replace(/\D/g, '').slice(0, 11);
+}
+
+export function findClientByCpf<T extends { cpf: string }>(
+  clients: T[],
+  cpfInput: string
+): T | null {
+  const target = normalizeCpfDigits(cpfInput);
+  if (target.length !== 11) return null;
+  return clients.find((c) => normalizeCpfDigits(c.cpf) === target) || null;
+}
+
 export function buildTemplateValuesFromClient(client: {
   fullName: string;
   cpf: string;
@@ -112,6 +134,28 @@ export function buildTemplateValuesFromClient(client: {
   };
 }
 
+const STANDARD_CLIENT_KEYS = new Set([
+  'NOME_COMPLETO',
+  'CPF',
+  'RG',
+  'EMAIL',
+  'TELEFONE',
+  'WHATSAPP',
+  'ENDERECO_COMPLETO',
+  'NACIONALIDADE',
+  'ESTADO_CIVIL',
+  'PROFISSAO',
+]);
+
+/**
+ * Extracts fields from a template that are NOT already filled by ClientRecord cadastral data
+ * (e.g., [CAMPO: Objeto da Ação ou Demanda] or custom {{TAGS}}).
+ */
+export function extractModelSpecificFields(template: DocumentTemplate): TemplateTagField[] {
+  const all = extractTemplateFields(template.content, template.customFields);
+  return all.filter((f) => !STANDARD_CLIENT_KEYS.has(f.key));
+}
+
 export function matchLinksForClient<
   T extends { clientId?: string | null; clientName: string; whatsapp: string }
 >(
@@ -132,3 +176,71 @@ export function matchLinksForClient<
   });
 }
 
+export interface UnifiedClientEntry {
+  key: string;
+  clientRecord: ClientRecord | null;
+  displayName: string;
+  whatsapp: string;
+  cpf: string;
+  createdAt: string;
+  overallStatus: ServiceLinkStatus | 'cadastrado';
+  linkedDocs: ServiceLink[];
+}
+
+export function resolveClientOverallStatus(
+  linkedDocs: ServiceLink[],
+  hasClientRecord: boolean
+): ServiceLinkStatus | 'cadastrado' {
+  if (linkedDocs.length === 0) return hasClientRecord ? 'cadastrado' : 'pendente';
+  if (linkedDocs.some((d) => d.status === 'assinando')) return 'assinando';
+  if (linkedDocs.some((d) => d.status === 'pendente')) return 'pendente';
+  return 'concluido';
+}
+
+export function buildUnifiedClientEntries(
+  clients: ClientRecord[],
+  links: ServiceLink[]
+): UnifiedClientEntry[] {
+  const consumedTokens = new Set<string>();
+  const entries: UnifiedClientEntry[] = [];
+
+  for (const client of clients) {
+    const matched = matchLinksForClient(client, links);
+    matched.forEach((m) => consumedTokens.add(m.tokenId));
+    entries.push({
+      key: `client:${client.id}`,
+      clientRecord: client,
+      displayName: client.fullName,
+      whatsapp: client.whatsapp,
+      cpf: client.cpf,
+      createdAt: client.createdAt,
+      overallStatus: resolveClientOverallStatus(matched, true),
+      linkedDocs: matched,
+    });
+  }
+
+  const linkOnlyBuckets = new Map<string, ServiceLink[]>();
+  for (const link of links) {
+    if (consumedTokens.has(link.tokenId)) continue;
+    const bucketKey = `${link.clientName.trim().toLowerCase()}|${normalizePhoneDigits(link.whatsapp)}`;
+    const bucket = linkOnlyBuckets.get(bucketKey) || [];
+    bucket.push(link);
+    linkOnlyBuckets.set(bucketKey, bucket);
+  }
+
+  for (const [bucketKey, bucketLinks] of linkOnlyBuckets.entries()) {
+    const latest = bucketLinks[0];
+    entries.push({
+      key: `link:${bucketKey}`,
+      clientRecord: null,
+      displayName: latest.clientName,
+      whatsapp: latest.whatsapp,
+      cpf: '',
+      createdAt: latest.createdAt,
+      overallStatus: resolveClientOverallStatus(bucketLinks, false),
+      linkedDocs: bucketLinks,
+    });
+  }
+
+  return entries.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}

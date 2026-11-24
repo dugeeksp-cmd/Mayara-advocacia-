@@ -10,121 +10,26 @@ import {
   UserPlus,
   Users,
 } from 'lucide-react';
-import type {
-  ClientRecord,
-  DocumentTemplate,
-  FooterProfile,
-  HeaderProfile,
-  LetterheadSettings,
-  LogoAsset,
-  ServiceLink,
-  ServiceLinkStatus,
-} from '../types/legal';
-import type { SaveClientInput } from '../services/dataService';
+import type { ServiceLinkStatus } from '../types/legal';
+import type { UnifiedClientEntry } from '../utils/legalFieldOptions';
 import { formatDateTimeBR } from '../utils/masksAndFormatters';
-import { matchLinksForClient } from '../utils/legalFieldOptions';
-import { AdminClientManualModal } from './AdminClientManualModal';
-import {
-  AdminClientSummaryModal,
-  type UnifiedClientEntry,
-} from './AdminClientSummaryModal';
 
 interface AdminClientsViewProps {
-  clients: ClientRecord[];
-  links: ServiceLink[];
-  templates: DocumentTemplate[];
-  headers: HeaderProfile[];
-  footers: FooterProfile[];
-  logos: LogoAsset[];
-  letterhead: LetterheadSettings;
-  onSaveClient: (input: SaveClientInput) => Promise<ClientRecord>;
-  onCreateAtendimentoForClient: (input: {
-    clientId: string;
-    clientName: string;
-    whatsapp: string;
-    templateId: string;
-    templateTitle: string;
-  }) => Promise<void>;
-}
-
-function resolveOverallStatus(
-  linkedDocs: ServiceLink[],
-  hasClientRecord: boolean
-): ServiceLinkStatus | 'cadastrado' {
-  if (linkedDocs.length === 0) return hasClientRecord ? 'cadastrado' : 'pendente';
-  if (linkedDocs.some((d) => d.status === 'assinando')) return 'assinando';
-  if (linkedDocs.some((d) => d.status === 'pendente')) return 'pendente';
-  return 'concluido';
+  unifiedEntries: UnifiedClientEntry[];
+  feedback: string | null;
+  onOpenSummary: (entryKey: string) => void;
+  onOpenNewClient: () => void;
 }
 
 export function AdminClientsView({
-  clients,
-  links,
-  templates,
-  headers,
-  footers,
-  logos,
-  letterhead,
-  onSaveClient,
-  onCreateAtendimentoForClient,
+  unifiedEntries,
+  feedback,
+  onOpenSummary,
+  onOpenNewClient,
 }: AdminClientsViewProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | ServiceLinkStatus>('all');
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
-  const [feedback, setFeedback] = useState<string | null>(null);
-
-  // Modals
-  const [summaryKey, setSummaryKey] = useState<string | null>(null);
-  const [manualModalOpen, setManualModalOpen] = useState(false);
-  const [editingClient, setEditingClient] = useState<ClientRecord | null>(null);
-  const [prefillName, setPrefillName] = useState('');
-  const [prefillWhatsapp, setPrefillWhatsapp] = useState('');
-
-  const unifiedEntries = useMemo<UnifiedClientEntry[]>(() => {
-    const consumedTokens = new Set<string>();
-    const entries: UnifiedClientEntry[] = [];
-
-    for (const client of clients) {
-      const matched = matchLinksForClient(client, links);
-      matched.forEach((m) => consumedTokens.add(m.tokenId));
-      entries.push({
-        key: `client:${client.id}`,
-        clientRecord: client,
-        displayName: client.fullName,
-        whatsapp: client.whatsapp,
-        cpf: client.cpf,
-        createdAt: client.createdAt,
-        overallStatus: resolveOverallStatus(matched, true),
-        linkedDocs: matched,
-      });
-    }
-
-    // Group remaining link-only atendimentos (created via Link Rápido without manual ClientRecord)
-    const linkOnlyBuckets = new Map<string, ServiceLink[]>();
-    for (const link of links) {
-      if (consumedTokens.has(link.tokenId)) continue;
-      const bucketKey = `${link.clientName.trim().toLowerCase()}|${link.whatsapp.replace(/\D/g, '').slice(-11)}`;
-      const bucket = linkOnlyBuckets.get(bucketKey) || [];
-      bucket.push(link);
-      linkOnlyBuckets.set(bucketKey, bucket);
-    }
-
-    for (const [bucketKey, bucketLinks] of linkOnlyBuckets.entries()) {
-      const latest = bucketLinks[0];
-      entries.push({
-        key: `link:${bucketKey}`,
-        clientRecord: null,
-        displayName: latest.clientName,
-        whatsapp: latest.whatsapp,
-        cpf: '',
-        createdAt: latest.createdAt,
-        overallStatus: resolveOverallStatus(bucketLinks, false),
-        linkedDocs: bucketLinks,
-      });
-    }
-
-    return entries.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  }, [clients, links]);
 
   const filteredClients = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
@@ -140,11 +45,6 @@ export function AdminClientsView({
     });
   }, [unifiedEntries, searchTerm, statusFilter]);
 
-  const selectedSummaryEntry = useMemo(
-    () => unifiedEntries.find((e) => e.key === summaryKey) || null,
-    [unifiedEntries, summaryKey]
-  );
-
   async function handleCopyLink(tokenId: string) {
     const url = `${window.location.origin}/?token=${encodeURIComponent(tokenId)}`;
     try {
@@ -154,21 +54,6 @@ export function AdminClientsView({
     } catch {
       // Ignore clipboard failure
     }
-  }
-
-  function openNewManualClientModal() {
-    setEditingClient(null);
-    setPrefillName('');
-    setPrefillWhatsapp('');
-    setManualModalOpen(true);
-  }
-
-  function handleEditOrCompleteClient(entry: UnifiedClientEntry) {
-    setSummaryKey(null);
-    setEditingClient(entry.clientRecord);
-    setPrefillName(entry.displayName);
-    setPrefillWhatsapp(entry.whatsapp);
-    setManualModalOpen(true);
   }
 
   return (
@@ -189,8 +74,8 @@ export function AdminClientsView({
             Clientes e Atendimentos
           </h2>
           <p className="text-sm text-slate-600">
-            Clique em um cliente para ver o resumo completo e baixar documentos, ou cadastre um novo
-            cliente manualmente.
+            Clique em um cliente para ver o resumo completo, baixar ou adicionar documentos, ou
+            cadastre um novo cliente manualmente.
           </p>
         </div>
 
@@ -212,7 +97,7 @@ export function AdminClientsView({
 
           <button
             type="button"
-            onClick={openNewManualClientModal}
+            onClick={onOpenNewClient}
             className="min-h-[48px] px-5 py-2.5 rounded-xl bg-[#0B1D3A] text-white text-sm font-semibold hover:bg-[#132B52] inline-flex items-center justify-center gap-2 whitespace-nowrap shrink-0 transition-colors"
           >
             <UserPlus className="w-4 h-4 text-[#CFAF6E]" aria-hidden="true" />
@@ -280,7 +165,7 @@ export function AdminClientsView({
                 return (
                   <tr
                     key={entry.key}
-                    onClick={() => setSummaryKey(entry.key)}
+                    onClick={() => onOpenSummary(entry.key)}
                     className="hover:bg-[#F7F1E3]/30 cursor-pointer transition-colors"
                   >
                     <td className="py-3.5 pr-4">
@@ -288,7 +173,7 @@ export function AdminClientsView({
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          setSummaryKey(entry.key);
+                          onOpenSummary(entry.key);
                         }}
                         className="text-left group"
                       >
@@ -305,7 +190,11 @@ export function AdminClientsView({
                     <td className="py-3.5 px-4 tabular-nums">
                       <p className="text-slate-800">{entry.whatsapp}</p>
                       <p className="text-xs text-slate-500">
-                        {entry.clientRecord ? 'Ficha completa salva' : latestDoc ? `PIN: ${latestDoc.pin}` : '—'}
+                        {entry.clientRecord
+                          ? 'Ficha completa salva'
+                          : latestDoc
+                            ? `PIN: ${latestDoc.pin}`
+                            : '—'}
                       </p>
                     </td>
                     <td className="py-3.5 px-4 text-slate-700">
@@ -347,7 +236,7 @@ export function AdminClientsView({
                       <div className="inline-flex items-center gap-2">
                         <button
                           type="button"
-                          onClick={() => setSummaryKey(entry.key)}
+                          onClick={() => onOpenSummary(entry.key)}
                           className="inline-flex items-center justify-center min-h-[40px] px-3.5 py-1.5 rounded-xl bg-[#0B1D3A] text-white text-xs font-semibold hover:bg-[#132B52] whitespace-nowrap"
                         >
                           Ver Resumo
@@ -371,35 +260,6 @@ export function AdminClientsView({
           </table>
         </div>
       )}
-
-      {/* Client Summary & Document History Modal */}
-      <AdminClientSummaryModal
-        entry={selectedSummaryEntry}
-        templates={templates}
-        headers={headers}
-        footers={footers}
-        logos={logos}
-        letterhead={letterhead}
-        onClose={() => setSummaryKey(null)}
-        onEditOrCompleteClient={handleEditOrCompleteClient}
-      />
-
-      {/* Manual Client Registration / Edit Modal */}
-      <AdminClientManualModal
-        isOpen={manualModalOpen}
-        editingClient={editingClient}
-        prefillName={prefillName}
-        prefillWhatsapp={prefillWhatsapp}
-        templates={templates}
-        headers={headers}
-        footers={footers}
-        logos={logos}
-        letterhead={letterhead}
-        onClose={() => setManualModalOpen(false)}
-        onSaveClient={onSaveClient}
-        onCreateAtendimentoForClient={onCreateAtendimentoForClient}
-        onSuccessFeedback={(msg) => setFeedback(msg)}
-      />
     </div>
   );
 }

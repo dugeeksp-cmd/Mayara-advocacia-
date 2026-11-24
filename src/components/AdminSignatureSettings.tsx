@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
-import { Check, Save, ShieldCheck } from 'lucide-react';
-import type { SignatureConfigSettings, SignatureServerConfig } from '../types/legal';
+import { Check, ExternalLink, Save, ShieldCheck } from 'lucide-react';
+import type { SignatureConfigSettings } from '../types/legal';
 
 interface AdminSignatureSettingsProps {
   signatureConfig: SignatureConfigSettings;
-  signatureServerConfig: SignatureServerConfig | null;
   onSaveSignatureConfig: (
     config: Omit<SignatureConfigSettings, 'updatedAt' | 'updatedBy'>
   ) => Promise<void>;
@@ -12,14 +11,15 @@ interface AdminSignatureSettingsProps {
 
 export function AdminSignatureSettings({
   signatureConfig,
-  signatureServerConfig,
   onSaveSignatureConfig,
 }: AdminSignatureSettingsProps) {
   const [sigForm, setSigForm] = useState<Omit<SignatureConfigSettings, 'updatedAt' | 'updatedBy'>>({
-    defaultProvider: signatureConfig.defaultProvider,
-    clicksignEnabled: signatureConfig.clicksignEnabled,
-    docusignEnabled: signatureConfig.docusignEnabled,
     govbrEnabled: signatureConfig.govbrEnabled,
+    govbrPortalUrl: signatureConfig.govbrPortalUrl || 'https://assinador.iti.br',
+    instructionsNote:
+      signatureConfig.instructionsNote ||
+      'Utilize sua conta Gov.br (nível Prata ou Ouro) no portal oficial assinador.iti.br ou pelo aplicativo Gov.br.',
+    requireSignedUpload: signatureConfig.requireSignedUpload,
   });
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
@@ -30,7 +30,7 @@ export function AdminSignatureSettings({
     setSavedMsg(null);
     try {
       await onSaveSignatureConfig(sigForm);
-      setSavedMsg('Configurações de assinatura eletrônica salvas com sucesso.');
+      setSavedMsg('Configurações da Assinatura Digital Gov.br salvas com sucesso.');
     } finally {
       setSaving(false);
     }
@@ -44,11 +44,11 @@ export function AdminSignatureSettings({
         </div>
         <div>
           <h2 className="font-display text-xl sm:text-2xl font-semibold text-[#0B1D3A]">
-            Assinatura Eletrônica
+            Assinatura Eletrônica · Gov.br
           </h2>
           <p className="text-sm text-slate-600">
-            Configure quais plataformas (Clicksign, DocuSign e Gov.br) ficarão disponíveis para o
-            cliente na Etapa 2 após gerar o documento PDF.
+            Fluxo 100% exclusivo para assinatura digital gratuita pelo portal oficial do Governo
+            Federal (assinador.iti.br), com envio do PDF assinado diretamente pelo cliente na Etapa 3.
           </p>
         </div>
       </div>
@@ -64,82 +64,95 @@ export function AdminSignatureSettings({
       )}
 
       <form onSubmit={handleSubmit} className="space-y-5">
-        <div>
-          <label htmlFor="sig-default" className="block text-sm font-semibold text-[#0B1D3A] mb-1.5">
-            Provedor Integrado Padrão
-          </label>
-          <select
-            id="sig-default"
-            value={sigForm.defaultProvider}
+        <label className="flex items-center justify-between gap-4 p-4 rounded-xl border border-slate-200 cursor-pointer hover:border-slate-300 transition-colors">
+          <div>
+            <p className="text-sm font-semibold text-[#0B1D3A]">
+              Assinatura Digital Gov.br Ativa (assinador.iti.br)
+            </p>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Exibe o tutorial passo a passo e o link direto do assinador oficial Gov.br após o
+              cliente baixar o PDF preenchido.
+            </p>
+          </div>
+          <input
+            type="checkbox"
+            checked={sigForm.govbrEnabled}
             onChange={(e) =>
-              setSigForm((prev) => ({
-                ...prev,
-                defaultProvider: e.target.value as 'clicksign' | 'docusign',
-              }))
+              setSigForm((prev) => ({ ...prev, govbrEnabled: e.target.checked }))
             }
-            className="w-full min-h-[48px] px-4 py-2.5 rounded-xl border border-slate-300 text-sm bg-white"
+            className="w-5 h-5 accent-[#0B1D3A] shrink-0"
+          />
+        </label>
+
+        <div>
+          <label
+            htmlFor="sig-govbr-url"
+            className="block text-sm font-semibold text-[#0B1D3A] mb-1.5"
           >
-            <option value="clicksign">Clicksign (MP 2.200-2/2001)</option>
-            <option value="docusign">DocuSign eSignature</option>
-          </select>
+            URL Oficial do Assinador Gov.br
+          </label>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <input
+              id="sig-govbr-url"
+              type="url"
+              value={sigForm.govbrPortalUrl}
+              onChange={(e) =>
+                setSigForm((prev) => ({ ...prev, govbrPortalUrl: e.target.value }))
+              }
+              placeholder="https://assinador.iti.br"
+              className="flex-1 min-h-[48px] px-4 py-2.5 rounded-xl border border-slate-300 text-sm text-[#0F172A] font-mono bg-white"
+              required
+            />
+            <a
+              href={sigForm.govbrPortalUrl || 'https://assinador.iti.br'}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="min-h-[48px] px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-xs sm:text-sm font-semibold text-[#0B1D3A] hover:bg-slate-50 inline-flex items-center justify-center gap-1.5 shrink-0"
+            >
+              Testar Link
+              <ExternalLink className="w-4 h-4" aria-hidden="true" />
+            </a>
+          </div>
         </div>
 
-        <div className="space-y-3">
-          <label className="flex items-center justify-between gap-4 p-4 rounded-xl border border-slate-200 cursor-pointer hover:border-slate-300 transition-colors">
-            <div>
-              <p className="text-sm font-semibold text-[#0B1D3A]">Clicksign Integrado</p>
-              <p className="text-xs text-slate-500 mt-0.5">
-                {signatureServerConfig?.clicksignConfigured
-                  ? `Credencial API ativa (${signatureServerConfig.clicksignEnv})`
-                  : 'Modo Homologação Criptográfico (defina CLICKSIGN_ACCESS_TOKEN no servidor para produção)'}
-              </p>
-            </div>
-            <input
-              type="checkbox"
-              checked={sigForm.clicksignEnabled}
-              onChange={(e) =>
-                setSigForm((prev) => ({ ...prev, clicksignEnabled: e.target.checked }))
-              }
-              className="w-5 h-5 accent-[#0B1D3A] shrink-0"
-            />
+        <div>
+          <label
+            htmlFor="sig-govbr-note"
+            className="block text-sm font-semibold text-[#0B1D3A] mb-1.5"
+          >
+            Orientação Adicional Exibida ao Cliente
           </label>
-
-          <label className="flex items-center justify-between gap-4 p-4 rounded-xl border border-slate-200 cursor-pointer hover:border-slate-300 transition-colors">
-            <div>
-              <p className="text-sm font-semibold text-[#0B1D3A]">DocuSign Integrado</p>
-              <p className="text-xs text-slate-500 mt-0.5">
-                {signatureServerConfig?.docusignConfigured
-                  ? 'Credencial API ativa no servidor'
-                  : 'Modo Homologação Criptográfico (defina DOCUSIGN_ACCESS_TOKEN no servidor para produção)'}
-              </p>
-            </div>
-            <input
-              type="checkbox"
-              checked={sigForm.docusignEnabled}
-              onChange={(e) =>
-                setSigForm((prev) => ({ ...prev, docusignEnabled: e.target.checked }))
-              }
-              className="w-5 h-5 accent-[#0B1D3A] shrink-0"
-            />
-          </label>
-
-          <label className="flex items-center justify-between gap-4 p-4 rounded-xl border border-slate-200 cursor-pointer hover:border-slate-300 transition-colors">
-            <div>
-              <p className="text-sm font-semibold text-[#0B1D3A]">Gov.br (assinador.iti.br)</p>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Tutorial guiado em 5 passos + envio do PDF assinado no portal Gov.br
-              </p>
-            </div>
-            <input
-              type="checkbox"
-              checked={sigForm.govbrEnabled}
-              onChange={(e) =>
-                setSigForm((prev) => ({ ...prev, govbrEnabled: e.target.checked }))
-              }
-              className="w-5 h-5 accent-[#0B1D3A] shrink-0"
-            />
-          </label>
+          <textarea
+            id="sig-govbr-note"
+            rows={3}
+            value={sigForm.instructionsNote || ''}
+            onChange={(e) =>
+              setSigForm((prev) => ({ ...prev, instructionsNote: e.target.value }))
+            }
+            placeholder="Instruções sobre conta nível Prata ou Ouro, posicionamento do selo azul..."
+            className="w-full p-3.5 rounded-xl border border-slate-300 text-sm text-[#0F172A] bg-white"
+          />
         </div>
+
+        <label className="flex items-center justify-between gap-4 p-4 rounded-xl border border-slate-200 cursor-pointer hover:border-slate-300 transition-colors">
+          <div>
+            <p className="text-sm font-semibold text-[#0B1D3A]">
+              Exigir Envio do PDF Assinado pelo Gov.br na Etapa 3
+            </p>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Após assinar no portal Gov.br, o cliente anexa o PDF final assinado para registro
+              automático no painel.
+            </p>
+          </div>
+          <input
+            type="checkbox"
+            checked={sigForm.requireSignedUpload}
+            onChange={(e) =>
+              setSigForm((prev) => ({ ...prev, requireSignedUpload: e.target.checked }))
+            }
+            className="w-5 h-5 accent-[#0B1D3A] shrink-0"
+          />
+        </label>
 
         <button
           type="submit"
@@ -147,7 +160,7 @@ export function AdminSignatureSettings({
           className="min-h-[48px] px-6 py-3 rounded-xl bg-[#0B1D3A] text-white text-sm font-semibold hover:bg-[#132B52] disabled:opacity-60 inline-flex items-center gap-2"
         >
           <Save className="w-4 h-4" aria-hidden="true" />
-          {saving ? 'Salvando...' : 'Salvar Configurações de Assinatura'}
+          {saving ? 'Salvando...' : 'Salvar Configurações Gov.br'}
         </button>
       </form>
     </section>

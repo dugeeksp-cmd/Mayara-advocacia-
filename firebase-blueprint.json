@@ -186,22 +186,21 @@
     },
     "SignatureConfigSettings": {
       "title": "SignatureConfigSettings",
-      "description": "Integrated electronic signature provider settings (Clicksign / DocuSign / Gov.br).",
+      "description": "Gov.br exclusive digital signature configuration settings.",
       "type": "object",
       "properties": {
-        "defaultProvider": { "type": "string", "enum": ["clicksign", "docusign"] },
-        "clicksignEnabled": { "type": "boolean" },
-        "docusignEnabled": { "type": "boolean" },
         "govbrEnabled": { "type": "boolean" },
+        "govbrPortalUrl": { "type": "string", "minLength": 8, "maxLength": 200 },
+        "instructionsNote": { "type": "string", "maxLength": 500 },
+        "requireSignedUpload": { "type": "boolean" },
         "officeId": { "type": "string", "maxLength": 64 },
         "updatedAt": { "type": "string", "format": "date-time" },
         "updatedBy": { "type": "string", "maxLength": 128 }
       },
       "required": [
-        "defaultProvider",
-        "clicksignEnabled",
-        "docusignEnabled",
         "govbrEnabled",
+        "govbrPortalUrl",
+        "requireSignedUpload",
         "updatedAt",
         "updatedBy"
       ]
@@ -319,7 +318,7 @@
         "status": { "type": "string", "enum": ["pendente", "assinando", "concluido"] },
         "signatureMethod": {
           "type": "string",
-          "enum": ["none", "govbr", "clicksign", "docusign"]
+          "enum": ["none", "govbr"]
         },
         "signatureEnvelopeId": { "type": "string", "maxLength": 128 },
         "signatureAuditHash": { "type": "string", "maxLength": 128 },

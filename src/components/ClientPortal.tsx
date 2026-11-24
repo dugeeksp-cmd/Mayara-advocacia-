@@ -8,7 +8,6 @@ import type {
   LogoAsset,
   ServiceLink,
   SignatureConfigSettings,
-  SignatureProvider,
 } from '../types/legal';
 import { dataService, DEMO_SERVICE_LINK } from '../services/dataService';
 import { DEFAULT_SIGNATURE_CONFIG, DEFAULT_TEMPLATES } from '../utils/templateEngine';
@@ -421,28 +420,11 @@ export function ClientPortal({ initialToken, letterhead, onBackHome }: ClientPor
             if (layer2Unlocked) setActiveLayer(2);
           }}
           link={link}
-          letterhead={letterhead}
-          header={resolvedTimbrado.header}
-          footer={resolvedTimbrado.footer}
-          logo={resolvedTimbrado.logo}
           signatureConfig={signatureConfig}
           generatedArtifact={transientPdf?.artifact || null}
-          renderedText={transientPdf?.renderedText || ''}
-          signerDisplayName={transientPdf?.signerDisplayName || link.clientName}
           onAdvanceToGovBrUpload={() => {
             setLayer3Unlocked(true);
             setActiveLayer(3);
-          }}
-          onIntegratedSignatureCompleted={(fileName: string, method: SignatureProvider) => {
-            // Wipe transient PDF buffer from RAM immediately after upload
-            setTransientPdf(null);
-            setCompletedSummary({
-              fileName,
-              methodLabel:
-                method === 'clicksign'
-                  ? 'Clicksign (Assinatura Eletrônica)'
-                  : 'DocuSign (Assinatura Eletrônica)',
-            });
           }}
         />
 

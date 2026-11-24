@@ -1,5 +1,4 @@
-export type SignatureProvider = 'clicksign' | 'docusign';
-export type SignatureMethod = 'none' | 'govbr' | 'clicksign' | 'docusign';
+export type SignatureMethod = 'none' | 'govbr';
 export type ServiceLinkStatus = 'pendente' | 'assinando' | 'concluido';
 export type HeaderAlignment = 'left' | 'center' | 'right';
 export type CustomFieldType = 'text' | 'number' | 'date' | 'cpf_cnpj' | 'email' | 'phone';
@@ -87,10 +86,10 @@ export interface LetterheadSettings {
 }
 
 export interface SignatureConfigSettings {
-  defaultProvider: SignatureProvider;
-  clicksignEnabled: boolean;
-  docusignEnabled: boolean;
   govbrEnabled: boolean;
+  govbrPortalUrl: string;
+  instructionsNote?: string;
+  requireSignedUpload: boolean;
   officeId?: string;
   updatedAt: string;
   updatedBy: string;
@@ -170,23 +169,4 @@ export interface TemplateTagField {
   fieldType?: CustomFieldType;
   isAddressComposite?: boolean;
   isCustom?: boolean;
-}
-
-export interface SignatureEnvelope {
-  envelopeId: string;
-  provider: SignatureProvider;
-  status: 'awaiting_signature' | 'signed' | 'failed';
-  mode: 'live' | 'sandbox';
-  documentHash: string;
-  signingUrl?: string;
-  signerName: string;
-  signedAt?: string;
-  auditHash?: string;
-  signatureDataUrl?: string;
-}
-
-export interface SignatureServerConfig {
-  clicksignConfigured: boolean;
-  docusignConfigured: boolean;
-  clicksignEnv: string;
 }

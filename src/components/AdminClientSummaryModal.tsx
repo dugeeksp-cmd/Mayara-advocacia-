@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   CheckCircle2,
   Clock,
   Copy,
   Edit3,
   FileDown,
+  FilePlus2,
   FileSignature,
   FileText,
   Loader2,
@@ -12,7 +13,6 @@ import {
   X,
 } from 'lucide-react';
 import type {
-  ClientRecord,
   DocumentTemplate,
   FooterProfile,
   HeaderProfile,
@@ -21,22 +21,21 @@ import type {
   ServiceLink,
   ServiceLinkStatus,
 } from '../types/legal';
-import { formatDateTimeBR } from '../utils/masksAndFormatters';
-import { buildTemplateValuesFromClient } from '../utils/legalFieldOptions';
+import {
+  formatCpfOrCnpj,
+  formatDateTimeBR,
+  formatPhoneBR,
+} from '../utils/masksAndFormatters';
+import {
+  buildTemplateValuesFromClient,
+  extractModelSpecificFields,
+  type UnifiedClientEntry,
+} from '../utils/legalFieldOptions';
 import { interpolateTemplate } from '../utils/templateEngine';
 import { resolveTemplateTimbrado } from '../utils/timbradoTheme';
 import { generateLegalDocumentPdf, triggerBlobDownload } from '../utils/pdfGenerator';
 
-export interface UnifiedClientEntry {
-  key: string;
-  clientRecord: ClientRecord | null;
-  displayName: string;
-  whatsapp: string;
-  cpf: string;
-  createdAt: string;
-  overallStatus: ServiceLinkStatus | 'cadastrado';
-  linkedDocs: ServiceLink[];
-}
+export type { UnifiedClientEntry };
 
 interface AdminClientSummaryModalProps {
   entry: UnifiedClientEntry | null;
@@ -46,7 +45,14 @@ interface AdminClientSummaryModalProps {
   logos: LogoAsset[];
   letterhead: LetterheadSettings;
   onClose: () => void;
-  onEditOrCompleteClient: (entry: UnifiedClientEntry) => void;
+  onEditOrCompleteClient: (entry: UnifiedClientEntry, generatePdfAfter?: boolean) => void;
+  onCreateAtendimentoForClient: (input: {
+    clientId: string;
+    clientName: string;
+    whatsapp: string;
+    templateId: string;
+    templateTitle: string;
+  }) => Promise<void>;
 }
 
 function renderStatusBadge(status: ServiceLinkStatus | 'cadastrado') {
@@ -91,9 +97,29 @@ export function AdminClientSummaryModal({
   letterhead,
   onClose,
   onEditOrCompleteClient,
+  onCreateAtendimentoForClient,
 }: AdminClientSummaryModalProps) {
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // Quick "+ Adicionar Novo Documento / Contrato" state
+  const defaultTemplate = templates.find((t) => t.isDefault) || templates[0];
+  const [addDocOpen, setAddDocOpen] = useState(false);
+  const [newDocTemplateId, setNewDocTemplateId] = useState<string>(defaultTemplate?.id || '');
+  const [extraFieldValues, setExtraFieldValues] = useState<Record<string, string>>({});
+  const [creatingDoc, setCreatingDoc] = useState(false);
+  const [docFeedback, setDocFeedback] = useState<string | null>(null);
+  const [docError, setDocError] = useState<string | null>(null);
+
+  const selectedAddTemplate = useMemo(
+    () => templates.find((t) => t.id === newDocTemplateId) || defaultTemplate,
+    [templates, newDocTemplateId, defaultTemplate]
+  );
+
+  const modelSpecificFields = useMemo(
+    () => (selectedAddTemplate ? extractModelSpecificFields(selectedAddTemplate) : []),
+    [selectedAddTemplate]
+  );
 
   if (!entry) return null;
 
@@ -170,6 +196,81 @@ export function AdminClientSummaryModal({
     }
   }
 
+  function handleToggleAddDoc() {
+    setDocError(null);
+    setDocFeedback(null);
+    if (!client) {
+      onEditOrCompleteClient(entry!, true);
+      return;
+    }
+    setNewDocTemplateId(defaultTemplate?.id || templates[0]?.id || '');
+    setExtraFieldValues({});
+    setAddDocOpen((prev) => !prev);
+  }
+
+  async function handleGenerateAdditionalDocument(e: React.FormEvent) {
+    e.preventDefault();
+    if (!client || !selectedAddTemplate) return;
+    setDocError(null);
+    setDocFeedback(null);
+
+    for (const field of modelSpecificFields) {
+      if (!(extraFieldValues[field.rawToken] || '').trim()) {
+        setDocError(`Informe o campo "${field.label}" antes de gerar o documento.`);
+        return;
+      }
+    }
+
+    setCreatingDoc(true);
+    try {
+      await onCreateAtendimentoForClient({
+        clientId: client.id,
+        clientName: client.fullName,
+        whatsapp: client.whatsapp,
+        templateId: selectedAddTemplate.id,
+        templateTitle: selectedAddTemplate.title,
+      });
+
+      const tagValues = {
+        ...buildTemplateValuesFromClient(client),
+        ...extraFieldValues,
+      };
+      const renderedText = interpolateTemplate(
+        selectedAddTemplate.content,
+        tagValues,
+        new Date(),
+        selectedAddTemplate.customFields
+      );
+      const { header, footer, logo } = resolveTemplateTimbrado({
+        template: selectedAddTemplate,
+        headers,
+        footers,
+        logos,
+        fallbackLetterhead: letterhead,
+      });
+      const artifact = await generateLegalDocumentPdf({
+        documentTitle: selectedAddTemplate.title,
+        renderedText,
+        letterhead,
+        header,
+        footer,
+        logo,
+        clientName: client.fullName,
+      });
+      triggerBlobDownload(artifact.blob, artifact.fileName);
+
+      setAddDocOpen(false);
+      setExtraFieldValues({});
+      setDocFeedback(
+        `Documento "${selectedAddTemplate.title}" gerado e vinculado ao histórico deste CPF.`
+      );
+    } catch (err) {
+      setDocError(err instanceof Error ? err.message : 'Erro ao gerar novo documento.');
+    } finally {
+      setCreatingDoc(false);
+    }
+  }
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0B1D3A]/55 overflow-y-auto"
@@ -198,7 +299,7 @@ export function AdminClientSummaryModal({
           <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
-              onClick={() => onEditOrCompleteClient(entry)}
+              onClick={() => onEditOrCompleteClient(entry, false)}
               className="min-h-[40px] px-3.5 py-2 rounded-xl border border-slate-300 bg-white text-xs sm:text-sm font-semibold text-[#0B1D3A] hover:bg-slate-50 inline-flex items-center gap-1.5"
             >
               <Edit3 className="w-4 h-4" aria-hidden="true" />
@@ -297,19 +398,150 @@ export function AdminClientSummaryModal({
                 </p>
                 <p className="text-xs text-amber-800 mt-0.5">
                   No portal do cliente os dados não são retidos automaticamente (LGPD). Você pode
-                  completar a ficha cadastral manualmente acima se desejar gerar novos PDFs direto
-                  do painel.
+                  completar a ficha cadastral manualmente para gerar novos PDFs direto do painel.
                 </p>
               </div>
             </div>
           )}
         </div>
 
-        {/* Document History */}
-        <div>
-          <h4 className="text-sm font-semibold text-[#0B1D3A] mb-3">
-            Histórico de Documentos ({totalDocs})
-          </h4>
+        {/* Document History & "+ Adicionar Novo Documento / Contrato" */}
+        <div className="space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+            <h4 className="text-sm font-semibold text-[#0B1D3A]">
+              Histórico de Documentos ({totalDocs})
+            </h4>
+
+            <button
+              type="button"
+              onClick={handleToggleAddDoc}
+              className="min-h-[42px] px-4 py-2 rounded-xl bg-[#0B1D3A] text-white text-xs sm:text-sm font-semibold hover:bg-[#132B52] inline-flex items-center justify-center gap-1.5 whitespace-nowrap"
+            >
+              <FilePlus2 className="w-4 h-4 text-[#CFAF6E]" aria-hidden="true" />
+              + Adicionar Novo Documento / Contrato
+            </button>
+          </div>
+
+          {docFeedback && (
+            <div
+              role="status"
+              className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs sm:text-sm font-medium flex items-center gap-2"
+            >
+              <CheckCircle2 className="w-4 h-4 shrink-0" aria-hidden="true" />
+              <span>{docFeedback}</span>
+            </div>
+          )}
+
+          {addDocOpen && client && (
+            <form
+              onSubmit={handleGenerateAdditionalDocument}
+              className="p-4 rounded-xl bg-[#F7F1E3]/55 border border-[#B8934A]/60 space-y-3"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs sm:text-sm font-semibold text-[#0B1D3A]">
+                  Gerar Novo Documento / Contrato para {client.fullName}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setAddDocOpen(false)}
+                  className="text-xs font-medium text-slate-600 hover:text-[#0B1D3A]"
+                >
+                  Cancelar
+                </button>
+              </div>
+
+              {docError && (
+                <div
+                  role="alert"
+                  className="p-2.5 rounded-lg bg-red-50 border border-red-200 text-red-800 text-xs font-medium"
+                >
+                  {docError}
+                </div>
+              )}
+
+              <div>
+                <label
+                  htmlFor="add-doc-template"
+                  className="block text-xs font-semibold text-[#0B1D3A] mb-1"
+                >
+                  Escolha o Modelo de Documento / Contrato
+                </label>
+                <select
+                  id="add-doc-template"
+                  value={newDocTemplateId}
+                  onChange={(e) => {
+                    setNewDocTemplateId(e.target.value);
+                    setExtraFieldValues({});
+                  }}
+                  className="w-full min-h-[44px] px-3.5 py-2 rounded-xl border border-slate-300 bg-white text-sm text-[#0F172A]"
+                >
+                  {templates.map((tpl) => (
+                    <option key={tpl.id} value={tpl.id}>
+                      {tpl.title} ({tpl.category})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {modelSpecificFields.length > 0 && (
+                <div className="space-y-2.5 pt-1">
+                  <p className="text-xs font-semibold text-[#9A7835]">
+                    Campos específicos deste modelo:
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {modelSpecificFields.map((field) => (
+                      <div key={field.rawToken} className="sm:col-span-2">
+                        <label
+                          htmlFor={`summary-extra-${field.key}`}
+                          className="block text-xs font-semibold text-[#0B1D3A] mb-1"
+                        >
+                          {field.label} *
+                        </label>
+                        <input
+                          id={`summary-extra-${field.key}`}
+                          type={field.type}
+                          value={extraFieldValues[field.rawToken] || ''}
+                          onChange={(e) => {
+                            let val = e.target.value;
+                            if (field.mask === 'cpf_cnpj') val = formatCpfOrCnpj(val);
+                            else if (field.mask === 'phone') val = formatPhoneBR(val);
+                            setExtraFieldValues((prev) => ({
+                              ...prev,
+                              [field.rawToken]: val,
+                            }));
+                          }}
+                          placeholder={field.placeholder}
+                          className="w-full min-h-[42px] px-3.5 py-2 rounded-xl border border-slate-300 bg-white text-sm text-[#0F172A]"
+                          required
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end pt-1">
+                <button
+                  type="submit"
+                  disabled={creatingDoc}
+                  className="min-h-[44px] px-5 py-2 rounded-xl bg-[#0B1D3A] text-white text-xs sm:text-sm font-semibold hover:bg-[#132B52] disabled:opacity-60 inline-flex items-center gap-2"
+                >
+                  {creatingDoc ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+                      Gerando PDF...
+                    </>
+                  ) : (
+                    <>
+                      <FileDown className="w-4 h-4" aria-hidden="true" />
+                      Gerar PDF e Adicionar ao Histórico
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          )}
+
           {entry.linkedDocs.length === 0 ? (
             <p className="text-xs sm:text-sm text-slate-500 p-4 rounded-xl border border-dashed border-slate-200 text-center">
               Nenhum documento vinculado a este cliente ainda.

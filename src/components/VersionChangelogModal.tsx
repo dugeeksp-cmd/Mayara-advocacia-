@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Check, ClipboardCheck, Loader2, X } from 'lucide-react';
 import { dataService } from '../services/dataService';
 
-export const CURRENT_APP_VERSION = 'v2.4.0';
+export const CURRENT_APP_VERSION = 'v2.5.0';
 
 interface ChangelogReleaseItem {
   id: string;
@@ -11,6 +11,30 @@ interface ChangelogReleaseItem {
 }
 
 const RELEASE_ITEMS: ChangelogReleaseItem[] = [
+  {
+    id: 'govbr_exclusive_signature',
+    title: 'Assinatura Eletrônica 100% Exclusiva via Gov.br',
+    description:
+      'Remoção de provedores externos pagos e fluxo otimizado para assinatura digital gratuita pelo portal oficial assinador.iti.br ou App Gov.br.',
+  },
+  {
+    id: 'cpf_primary_autofill',
+    title: 'CPF como Chave Principal e Autopreenchimento',
+    description:
+      'Ao digitar um CPF já cadastrado em "+ Cadastrar Cliente", os dados completos são carregados automaticamente e os novos PDFs ficam vinculados ao mesmo cadastro.',
+  },
+  {
+    id: 'add_doc_in_summary_and_unified_links',
+    title: '+ Adicionar Novo Documento no Resumo e Acesso Unificado',
+    description:
+      'Gere novos contratos/documentos diretamente no modal do cliente e acesse o mesmo resumo clicando no nome do cliente em "Documentos Recebidos".',
+  },
+  {
+    id: 'exclusive_default_and_test_pdf_preview',
+    title: 'Modelo Padrão Único e Pré-visualização de PDF de Teste',
+    description:
+      'Apenas um modelo permanece como padrão ativo por vez, com botão "Visualizar PDF de Teste" no editor antes de salvar.',
+  },
   {
     id: 'sync_cloud_firestore',
     title: 'Sincronização em Tempo Real no Firebase Firestore',
@@ -21,37 +45,13 @@ const RELEASE_ITEMS: ChangelogReleaseItem[] = [
     id: 'multi_timbrado_profiles',
     title: 'Múltiplos Perfis de Cabeçalho, Rodapé e Logotipos',
     description:
-      'Criação e edição de vários perfis nomeados com fonte, tamanho, cor personalizada (seletor livre) e prévia A4 em tempo real.',
-  },
-  {
-    id: 'per_template_timbrado',
-    title: 'Seleção de Timbrado por Modelo de Documento',
-    description:
-      'Escolha cabeçalho, rodapé e logotipo específicos em cada modelo (ou defina "Sem cabeçalho/rodapé/logo").',
+      'Criação e edição de vários perfis nomeados com fonte, tamanho, cor personalizada e prévia A4 em tempo real.',
   },
   {
     id: 'pdf_import_client_side',
     title: 'Importação de Modelos a partir de PDF (Client-Side)',
     description:
       'Extração inteligente de corpo do texto, cabeçalho, rodapé e logotipo diretamente no navegador sem envio a terceiros.',
-  },
-  {
-    id: 'client_summary_and_manual_crud',
-    title: 'Resumo do Cliente, Histórico de Documentos e Cadastro Manual',
-    description:
-      'Botão "+ Cadastrar Cliente" com geração imediata de PDF e modal completo de resumo ao clicar em qualquer cliente.',
-  },
-  {
-    id: 'smart_legal_fields',
-    title: 'Campos Inteligentes de Nacionalidade, Estado Civil e Profissão',
-    description:
-      'Seleção guiada para nacionalidade (incluindo campo estrangeiro), estado civil padronizado e busca rápida de profissões.',
-  },
-  {
-    id: 'test_mode_shortcuts',
-    title: 'Atalhos Temporários de Teste ("Entrar sem senha")',
-    description:
-      'Acesso rápido de demonstração tanto no Painel Administrativo quanto no Portal do Cliente.',
   },
 ];
 

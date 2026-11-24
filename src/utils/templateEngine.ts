@@ -26,10 +26,11 @@ export const DEFAULT_LETTERHEAD: LetterheadSettings = {
 };
 
 export const DEFAULT_SIGNATURE_CONFIG: SignatureConfigSettings = {
-  defaultProvider: 'clicksign',
-  clicksignEnabled: true,
-  docusignEnabled: true,
   govbrEnabled: true,
+  govbrPortalUrl: 'https://assinador.iti.br',
+  instructionsNote:
+    'Utilize sua conta Gov.br (nível Prata ou Ouro) no portal oficial assinador.iti.br ou pelo aplicativo Gov.br.',
+  requireSignedUpload: true,
   updatedAt: '2026-11-24T00:00:00.000Z',
   updatedBy: 'system',
 };
@@ -363,3 +364,48 @@ export function interpolateTemplate(
   output = output.split('{{DATA_EXTENSO}}').join(formatDateExtenso(dateOverride));
   return output;
 }
+
+const SAMPLE_STANDARD_VALUES: Record<string, string> = {
+  NOME_COMPLETO: 'Maria Aparecida da Silva (Exemplo)',
+  NACIONALIDADE: 'brasileiro(a)',
+  ESTADO_CIVIL: 'casado(a)',
+  PROFISSAO: 'comerciante',
+  RG: '12.345.678-9',
+  CPF: '123.456.789-00',
+  ENDERECO_COMPLETO: 'Rua das Flores, n.º 120, Centro, Saquarema/RJ, CEP 28990-000',
+  EMAIL: 'cliente.exemplo@email.com',
+  TELEFONE: '(22) 99999-0000',
+  WHATSAPP: '(22) 99999-0000',
+};
+
+/**
+ * Produces realistic sample values for every placeholder in a template so the lawyer
+ * can preview a rendered test PDF with header, footer, and logo before saving.
+ */
+export function buildSampleTemplateValues(
+  content: string,
+  customFields: CustomTemplateField[] = []
+): Record<string, string> {
+  const fields = extractTemplateFields(content, customFields);
+  const sampleMap: Record<string, string> = { ...SAMPLE_STANDARD_VALUES };
+
+  for (const field of fields) {
+    if (sampleMap[field.key]) {
+      sampleMap[field.rawToken] = sampleMap[field.key];
+      continue;
+    }
+
+    let sample = `[Exemplo: ${field.label}]`;
+    if (field.fieldType === 'number') sample = '1.500,00';
+    else if (field.fieldType === 'date') sample = '24/11/2026';
+    else if (field.fieldType === 'cpf_cnpj') sample = '123.456.789-00';
+    else if (field.fieldType === 'email') sample = 'contato.exemplo@email.com';
+    else if (field.fieldType === 'phone') sample = '(22) 99999-0000';
+
+    sampleMap[field.key] = sample;
+    sampleMap[field.rawToken] = sample;
+  }
+
+  return sampleMap;
+}
+
