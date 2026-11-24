@@ -4,6 +4,7 @@ import type { DocumentTemplate, LetterheadSettings } from '../types/legal';
 import {
   formatCEP,
   formatCPF,
+  formatCpfOrCnpj,
   formatPhoneBR,
   formatRG,
   isValidCPF,
@@ -40,7 +41,10 @@ export function ClientLayerForm({
   defaultClientName,
   onPdfGenerated,
 }: ClientLayerFormProps) {
-  const fields = useMemo(() => extractTemplateFields(template.content), [template.content]);
+  const fields = useMemo(
+    () => extractTemplateFields(template.content, template.customFields),
+    [template.content, template.customFields]
+  );
 
   const [values, setValues] = useState<Record<string, string>>(() => ({
     '{{NOME_COMPLETO}}': defaultClientName || '',
@@ -60,6 +64,7 @@ export function ClientLayerForm({
   function updateField(rawToken: string, val: string, mask: string) {
     let formatted = val;
     if (mask === 'cpf') formatted = formatCPF(val);
+    else if (mask === 'cpf_cnpj') formatted = formatCpfOrCnpj(val);
     else if (mask === 'rg') formatted = formatRG(val);
     else if (mask === 'phone') formatted = formatPhoneBR(val);
     setValues((prev) => ({ ...prev, [rawToken]: formatted }));
@@ -140,7 +145,12 @@ export function ClientLayerForm({
 
     setGenerating(true);
     try {
-      const renderedText = interpolateTemplate(template.content, values);
+      const renderedText = interpolateTemplate(
+        template.content,
+        values,
+        undefined,
+        template.customFields
+      );
       const signerDisplayName = (values['{{NOME_COMPLETO}}'] || defaultClientName).trim();
 
       const artifact = await generateLegalDocumentPdf({

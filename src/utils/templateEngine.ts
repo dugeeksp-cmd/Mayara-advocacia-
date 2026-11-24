@@ -1,4 +1,6 @@
 import type {
+  CustomFieldType,
+  CustomTemplateField,
   DocumentTemplate,
   FieldMaskType,
   LetterheadSettings,
@@ -11,10 +13,14 @@ export const DEFAULT_LETTERHEAD: LetterheadSettings = {
   officeTitle: 'MAYARA MARTINS — ADVOCACIA E CONSULTORIA JURÍDICA',
   oabNumber: 'OAB/RJ 229.359',
   subtitle: 'Subseção Saquarema · Seção do Estado do Rio de Janeiro',
+  headerAlignment: 'center',
   addressFooter: 'Rua Alfredo Menezes nº 720 - Loja 21 - Bacaxá, Saquarema/RJ - CEP 28994-675',
   phone: '(22) 99805-0980',
   email: 'maycmartinsadv@hotmail.com',
   instagram: '@mayaramartins_adv',
+  website: '',
+  logoDataUrl: null,
+  sealDataUrl: null,
   updatedAt: '2026-11-24T00:00:00.000Z',
   updatedBy: 'system',
 };
@@ -32,9 +38,9 @@ export const PROCURACAO_TEXT = `OUTORGANTE: {{NOME_COMPLETO}}, {{NACIONALIDADE}}
 
 OUTORGADA: MAYARA CHAGAS MARTINS, brasileira, solteira, advogada, inscrita na Ordem dos Advogados do Brasil sob o n° 229.359, Seção do Estado Rio de Janeiro, Subseção Saquarema, com endereço profissional a Rua Alfredo Menezes - n° 720 Loja 21 Bacaxá Saquarema RJ CEP 28994-675 e endereço eletrônico maycmartinsadv@hotmail.com.
 
-PODERES: Por este instrumento particular de procuração, concedo-lhe os poderes Ad Judicia e Extra Judicia, para o foro em geral representando o(a) Outorgante em qualquer juízo, Instância ou Tribunal, ou fora deles, em Cartórios, Repartições Públicas Municipais, Estaduais, Federais, Autarquias, Delegacias de Polícia, Conselhos Administrativos, Procon, Superintendência e demais Órgãos Públicos, podendo propor ações competentes contra quem de direito e defendê-lo nas contrárias, seguindo umas e outras até o final da decisão, interpondo e acompanhando os recursos legais necessários, conferindo, ainda, poderes especiais para confessar, desistir, negociar e transigir, renunciar, receber e dar quitação de qualquer importância em juízo ou fora dele, prestar caução, firmar compromissos ou acordos, promover quaisquer medidas preliminares, preventivas e assecuratórias do interesse do outorgante, inclusive, representar o outorgante em audiência de conciliação, nos moldes do § 1º do art.334 do CPC, conciliar, fazer justificações, notificações, preencher formulários, guias, requerer certidões, apresentar e retirar documentos, prestar depoimentos, substabelecer, enfim, praticar todos os atos necessários ao fiel cumprimento do presente mandato no presente feito.
+PODERES: Por este instrumento particular de procuração, concedo-lhe os poderes Ad Judicia e Extra Judicia, para o foro em geral representando o(a) Outorgante em qualquer juízo, Instância ou Tribunal, ou fora deles, em Cartórios, Repartições Públicas Municipais, Estaduais, Federais, Autarquias, Delegacias de Polícia, Conselhos Administrativos, Procon, Superintendência e demais Órgãos Públicos, podendo propor ações competentes contra quem de direito e defendê-lo nas contrárias, seguindo umas e outras até o final da decisão, interpondo e acompanhando os recursos legais necessários, conferindo, ainda, poderes especiais para confessar, desistir, negociar e transigir, renunciar, receber e dar quitação de qualquer importância em juízo ou fora dele, prestar caução, firmar compromos ou acordos, promover quaisquer medidas preliminares, preventivas e assecuratórias do interesse do outorgante, inclusive, representar o outorgante em audiência de conciliação, nos moldes do § 1º do art.334 do CPC, conciliar, fazer justificações, notificações, preencher formulários, guias, requerer certidões, apresentar e retirar documentos, prestar depoimentos, substabelecer, enfim, praticar todos os atos necessários ao fiel cumprimento do presente mandato no presente feito.
 
-Saquarema, {{DATA_EXTENSO}}.`;
+Saquarema, {{DATA_EXTENSO}}.`.replace('compromos', 'compromissos');
 
 export const DEFAULT_TEMPLATES: DocumentTemplate[] = [
   {
@@ -42,6 +48,7 @@ export const DEFAULT_TEMPLATES: DocumentTemplate[] = [
     title: 'Procuração Ad Judicia',
     category: 'Mandato Judicial',
     isDefault: true,
+    customFields: [],
     ownerUid: 'system',
     createdAt: '2026-11-24T00:00:00.000Z',
     updatedAt: '2026-11-24T00:00:00.000Z',
@@ -52,6 +59,7 @@ export const DEFAULT_TEMPLATES: DocumentTemplate[] = [
     title: 'Declaração de Hipossuficiência Econômica',
     category: 'Gratuidade de Justiça',
     isDefault: false,
+    customFields: [],
     ownerUid: 'system',
     createdAt: '2026-11-24T00:00:00.000Z',
     updatedAt: '2026-11-24T00:00:00.000Z',
@@ -66,6 +74,7 @@ Saquarema, {{DATA_EXTENSO}}.`,
     title: 'Contrato de Honorários Advocatícios',
     category: 'Honorários',
     isDefault: false,
+    customFields: [],
     ownerUid: 'system',
     createdAt: '2026-11-24T00:00:00.000Z',
     updatedAt: '2026-11-24T00:00:00.000Z',
@@ -161,7 +170,6 @@ export const AVAILABLE_TAGS_FOR_EDITOR = [
   '{{ENDERECO_COMPLETO}}',
   '{{EMAIL}}',
   '{{DATA_EXTENSO}}',
-  '[CAMPO: Nome do Campo]',
 ];
 
 function humanizeTagKey(key: string): string {
@@ -173,12 +181,77 @@ function humanizeTagKey(key: string): string {
 }
 
 /**
- * Extracts dynamic form fields from {{TAG}} and [CAMPO: Nome do Campo] tokens.
- * Excludes {{DATA_EXTENSO}} because it is automatically populated on generation.
+ * Generates an uppercase, accent-free tag from a human field name.
+ * Example: "Número do Processo" -> { key: "NUMERO_DO_PROCESSO", tag: "{{NUMERO_DO_PROCESSO}}" }
  */
-export function extractTemplateFields(content: string): TemplateTagField[] {
+export function generateTagFromFieldName(name: string): { key: string; tag: string } {
+  const key = name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .toUpperCase();
+  const safeKey = key || 'CAMPO_PERSONALIZADO';
+  return {
+    key: safeKey,
+    tag: `{{${safeKey}}}`,
+  };
+}
+
+/**
+ * Inserts a string at the exact cursor/selection range in a text buffer.
+ */
+export function insertTextAtCursor(
+  text: string,
+  insertion: string,
+  selectionStart: number,
+  selectionEnd: number
+): { nextText: string; nextCursor: number } {
+  const safeStart = Math.max(0, Math.min(selectionStart, text.length));
+  const safeEnd = Math.max(safeStart, Math.min(selectionEnd, text.length));
+  const before = text.slice(0, safeStart);
+  const after = text.slice(safeEnd);
+  const nextText = `${before}${insertion}${after}`;
+  const nextCursor = safeStart + insertion.length;
+  return { nextText, nextCursor };
+}
+
+function mapCustomTypeToInputAndMask(fieldType: CustomFieldType): {
+  type: 'text' | 'email' | 'number' | 'date';
+  mask: FieldMaskType;
+  placeholder: string;
+} {
+  switch (fieldType) {
+    case 'number':
+      return { type: 'number', mask: 'none', placeholder: 'Informe o valor numérico' };
+    case 'date':
+      return { type: 'date', mask: 'none', placeholder: '' };
+    case 'cpf_cnpj':
+      return { type: 'text', mask: 'cpf_cnpj', placeholder: '000.000.000-00 ou 00.000.000/0000-00' };
+    case 'email':
+      return { type: 'email', mask: 'email', placeholder: 'email@exemplo.com' };
+    case 'phone':
+      return { type: 'text', mask: 'phone', placeholder: '(22) 99999-9999' };
+    default:
+      return { type: 'text', mask: 'none', placeholder: 'Preencha este campo' };
+  }
+}
+
+/**
+ * Extracts dynamic form fields from {{TAG}} and [CAMPO: Nome do Campo] tokens,
+ * enriched with any explicit CustomTemplateField definitions saved on the template.
+ */
+export function extractTemplateFields(
+  content: string,
+  customFields: CustomTemplateField[] = []
+): TemplateTagField[] {
   const fields: TemplateTagField[] = [];
   const seen = new Set<string>();
+  const customMap = new Map<string, CustomTemplateField>();
+  for (const cf of customFields) {
+    customMap.set(cf.key, cf);
+  }
+
   const regex = /\{\{([A-Z0-9_]+)\}\}|\[CAMPO:\s*([^\]]+)\]/g;
 
   let match: RegExpExecArray | null;
@@ -187,6 +260,22 @@ export function extractTemplateFields(content: string): TemplateTagField[] {
       const key = match[1].trim();
       if (key === 'DATA_EXTENSO' || seen.has(key)) continue;
       seen.add(key);
+
+      const customDef = customMap.get(key);
+      if (customDef) {
+        const mapped = mapCustomTypeToInputAndMask(customDef.fieldType);
+        fields.push({
+          key,
+          rawToken: `{{${key}}}`,
+          label: customDef.label,
+          placeholder: mapped.placeholder,
+          type: mapped.type,
+          mask: mapped.mask,
+          fieldType: customDef.fieldType,
+          isCustom: true,
+        });
+        continue;
+      }
 
       const meta = STANDARD_TAG_META[key];
       fields.push({
@@ -197,6 +286,7 @@ export function extractTemplateFields(content: string): TemplateTagField[] {
         type: meta ? meta.type : 'text',
         mask: meta ? meta.mask : 'none',
         isAddressComposite: meta?.isAddressComposite,
+        isCustom: !meta,
       });
     } else if (match[2]) {
       const customLabel = match[2].trim();
@@ -216,6 +306,25 @@ export function extractTemplateFields(content: string): TemplateTagField[] {
         placeholder: `Preencha: ${customLabel}`,
         type: 'text',
         mask: 'none',
+        isCustom: true,
+      });
+    }
+  }
+
+  // Also include any saved custom fields even if user hasn't inserted the tag yet or wants them managed
+  for (const cf of customFields) {
+    if (!seen.has(cf.key)) {
+      seen.add(cf.key);
+      const mapped = mapCustomTypeToInputAndMask(cf.fieldType);
+      fields.push({
+        key: cf.key,
+        rawToken: cf.tag,
+        label: cf.label,
+        placeholder: mapped.placeholder,
+        type: mapped.type,
+        mask: mapped.mask,
+        fieldType: cf.fieldType,
+        isCustom: true,
       });
     }
   }
@@ -230,17 +339,24 @@ export function extractTemplateFields(content: string): TemplateTagField[] {
 export function interpolateTemplate(
   content: string,
   valuesByRawTokenOrKey: Record<string, string>,
-  dateOverride?: Date
+  dateOverride?: Date,
+  customFields: CustomTemplateField[] = []
 ): string {
-  const fields = extractTemplateFields(content);
+  const fields = extractTemplateFields(content, customFields);
   let output = content;
 
   for (const field of fields) {
-    const val = (
+    let val = (
       valuesByRawTokenOrKey[field.rawToken] ??
       valuesByRawTokenOrKey[field.key] ??
       ''
     ).trim();
+
+    if (field.type === 'date' && /^\d{4}-\d{2}-\d{2}$/.test(val)) {
+      const [y, m, d] = val.split('-');
+      val = `${d}/${m}/${y}`;
+    }
+
     output = output.split(field.rawToken).join(val);
   }
 

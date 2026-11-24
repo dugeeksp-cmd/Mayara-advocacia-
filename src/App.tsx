@@ -104,12 +104,12 @@ export default function App() {
         </div>
 
         <footer className="border-t border-slate-200 bg-white mt-12">
-          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-600">
             <p className="font-medium text-[#0B1D3A] text-center sm:text-left">
-              {letterhead.officeTitle} · {letterhead.oabNumber}
+              © 2026 Mayara Martins — Advocacia e Consultoria Jurídica. Todos os direitos reservados.
             </p>
-            <p className="text-center sm:text-right">
-              {letterhead.addressFooter} · {letterhead.phone} · {letterhead.email}
+            <p className="text-center sm:text-right text-slate-600">
+              Sistema exclusivo para a Dra. Mayara Martins • Desenvolvido com carinho por Eduardo Lima
             </p>
           </div>
         </footer>

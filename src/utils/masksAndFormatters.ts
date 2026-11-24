@@ -54,6 +54,14 @@ export function isValidCPF(value: string): boolean {
   return remainder === Number(digits[10]);
 }
 
+export function formatCpfOrCnpj(value: string): string {
+  const digits = onlyDigits(value).slice(0, 14);
+  if (digits.length <= 11) {
+    return formatCPF(digits);
+  }
+  return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8, 12)}-${digits.slice(12, 14)}`;
+}
+
 export function formatCEP(value: string): string {
   const digits = onlyDigits(value).slice(0, 8);
   if (digits.length <= 5) return digits;

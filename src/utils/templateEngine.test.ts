@@ -4,6 +4,8 @@ import {
   DEFAULT_TEMPLATES,
   PROCURACAO_TEXT,
   extractTemplateFields,
+  generateTagFromFieldName,
+  insertTextAtCursor,
   interpolateTemplate,
 } from './templateEngine';
 
@@ -44,4 +46,42 @@ test('interpolateTemplate replaces all standard and custom tags plus DATA_EXTENS
     rendered,
     'Eu, Ana Paula Souza, referente a Ação de Cobrança, Saquarema, 24 de novembro de 2026.'
   );
+});
+
+test('generateTagFromFieldName strips accents and uppercases into {{TAG}}', () => {
+  assert.deepEqual(generateTagFromFieldName('Número do Processo'), {
+    key: 'NUMERO_DO_PROCESSO',
+    tag: '{{NUMERO_DO_PROCESSO}}',
+  });
+  assert.deepEqual(generateTagFromFieldName('Valor dos Honorários (R$)'), {
+    key: 'VALOR_DOS_HONORARIOS_R',
+    tag: '{{VALOR_DOS_HONORARIOS_R}}',
+  });
+});
+
+test('insertTextAtCursor inserts variable exactly at cursor position and updates caret', () => {
+  const initial = 'Eu, , brasileiro(a)';
+  const { nextText, nextCursor } = insertTextAtCursor(initial, '{{NOME_COMPLETO}}', 4, 4);
+  assert.equal(nextText, 'Eu, {{NOME_COMPLETO}}, brasileiro(a)');
+  assert.equal(nextCursor, 4 + '{{NOME_COMPLETO}}'.length);
+});
+
+test('extractTemplateFields enriches saved customFields with configured type and mask', () => {
+  const fields = extractTemplateFields('Processo {{NUMERO_DO_PROCESSO}} de {{VENCIMENTO}}', [
+    {
+      key: 'NUMERO_DO_PROCESSO',
+      tag: '{{NUMERO_DO_PROCESSO}}',
+      label: 'Número do Processo',
+      fieldType: 'text',
+    },
+    {
+      key: 'VENCIMENTO',
+      tag: '{{VENCIMENTO}}',
+      label: 'Data de Vencimento',
+      fieldType: 'date',
+    },
+  ]);
+  assert.equal(fields.length, 2);
+  assert.equal(fields[1].type, 'date');
+  assert.equal(fields[1].label, 'Data de Vencimento');
 });

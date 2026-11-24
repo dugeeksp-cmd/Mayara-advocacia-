@@ -28,11 +28,33 @@ function drawLetterheadHeader(
   doc.setFillColor(11, 29, 58); // #0B1D3A
   doc.rect(0, 0, pageWidth, 6, 'F');
 
+  const align = letterhead.headerAlignment || 'center';
+  const textX = align === 'left' ? marginX : align === 'right' ? pageWidth - marginX : pageWidth / 2;
+
+  let textOffsetY = 20;
+  if (letterhead.logoDataUrl && letterhead.logoDataUrl.startsWith('data:image/')) {
+    try {
+      const imgFormat = letterhead.logoDataUrl.includes('image/png') ? 'PNG' : 'JPEG';
+      const logoW = 16;
+      const logoH = 16;
+      const logoX =
+        align === 'left'
+          ? marginX
+          : align === 'right'
+            ? pageWidth - marginX - logoW
+            : (pageWidth - logoW) / 2;
+      doc.addImage(letterhead.logoDataUrl, imgFormat, logoX, 10, logoW, logoH);
+      textOffsetY = 31;
+    } catch {
+      // Ignore malformed image
+    }
+  }
+
   // Office Title
   doc.setFont('times', 'bold');
-  doc.setFontSize(13);
+  doc.setFontSize(12.5);
   doc.setTextColor(11, 29, 58);
-  doc.text(letterhead.officeTitle.toUpperCase(), pageWidth / 2, 20, { align: 'center' });
+  doc.text(letterhead.officeTitle.toUpperCase(), textX, textOffsetY, { align });
 
   // OAB & Subtitle
   doc.setFont('helvetica', 'bold');
@@ -41,14 +63,15 @@ function drawLetterheadHeader(
   const oabLine = letterhead.subtitle
     ? `${letterhead.oabNumber}  |  ${letterhead.subtitle}`
     : letterhead.oabNumber;
-  doc.text(oabLine, pageWidth / 2, 26, { align: 'center' });
+  doc.text(oabLine, textX, textOffsetY + 6, { align });
 
+  const dividerY = textOffsetY + 10;
   // Gold horizontal divider
   doc.setDrawColor(184, 147, 74);
   doc.setLineWidth(0.6);
-  doc.line(marginX, 30, pageWidth - marginX, 30);
+  doc.line(marginX, dividerY, pageWidth - marginX, dividerY);
 
-  return 38;
+  return dividerY + 8;
 }
 
 function drawLetterheadFooter(
@@ -63,6 +86,15 @@ function drawLetterheadFooter(
   doc.setLineWidth(0.3);
   doc.line(marginX, footerTop, pageWidth - marginX, footerTop);
 
+  if (letterhead.sealDataUrl && letterhead.sealDataUrl.startsWith('data:image/')) {
+    try {
+      const imgFormat = letterhead.sealDataUrl.includes('image/png') ? 'PNG' : 'JPEG';
+      doc.addImage(letterhead.sealDataUrl, imgFormat, pageWidth - marginX - 12, footerTop + 2, 12, 12);
+    } catch {
+      // Ignore malformed seal
+    }
+  }
+
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
   doc.setTextColor(71, 85, 105);
@@ -72,6 +104,7 @@ function drawLetterheadFooter(
     `Tel/WhatsApp: ${letterhead.phone}`,
     `E-mail: ${letterhead.email}`,
     letterhead.instagram ? letterhead.instagram : '',
+    letterhead.website ? letterhead.website : '',
   ].filter(Boolean);
   doc.text(contactParts.join('  |  '), pageWidth / 2, footerTop + 10.5, { align: 'center' });
 }

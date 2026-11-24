@@ -51,6 +51,10 @@
           "type": "string",
           "maxLength": 160
         },
+        "headerAlignment": {
+          "type": "string",
+          "enum": ["left", "center", "right"]
+        },
         "addressFooter": {
           "type": "string",
           "minLength": 5,
@@ -67,6 +71,18 @@
         "instagram": {
           "type": "string",
           "maxLength": 80
+        },
+        "website": {
+          "type": "string",
+          "maxLength": 160
+        },
+        "logoDataUrl": {
+          "type": "string",
+          "maxLength": 350000
+        },
+        "sealDataUrl": {
+          "type": "string",
+          "maxLength": 350000
         },
         "updatedAt": {
           "type": "string",
@@ -151,6 +167,9 @@
         },
         "isDefault": {
           "type": "boolean"
+        },
+        "customFields": {
+          "type": "array"
         },
         "ownerUid": {
           "type": "string",

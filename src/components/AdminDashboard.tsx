@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { FileText, Link2, PenTool } from 'lucide-react';
+import { Menu } from 'lucide-react';
 import type {
   DocumentTemplate,
   LetterheadSettings,
@@ -9,11 +9,12 @@ import type {
 } from '../types/legal';
 import { dataService } from '../services/dataService';
 import { fetchSignatureServerConfig } from '../services/signatureApi';
+import { AdminSidebarDrawer, type AdminSection } from './AdminSidebarDrawer';
 import { AdminLinkGenerator } from './AdminLinkGenerator';
 import { AdminLinksManager } from './AdminLinksManager';
+import { AdminClientsView } from './AdminClientsView';
 import { AdminCmsEditor } from './AdminCmsEditor';
-
-type AdminTab = 'generate' | 'links' | 'cms';
+import { AdminSignatureSettings } from './AdminSignatureSettings';
 
 interface AdminDashboardProps {
   mode: 'firebase' | 'local';
@@ -21,12 +22,22 @@ interface AdminDashboardProps {
   onLetterheadUpdated: (next: LetterheadSettings) => void;
 }
 
+const SECTION_LABELS: Record<AdminSection, string> = {
+  generate: 'Gerar Link',
+  links: 'Documentos Recebidos',
+  clients: 'Clientes',
+  cms: 'Modelo e Timbrado',
+  signature: 'Assinatura Eletrônica',
+};
+
 export function AdminDashboard({
   mode,
   letterhead,
   onLetterheadUpdated,
 }: AdminDashboardProps) {
-  const [activeTab, setActiveTab] = useState<AdminTab>('generate');
+  const [activeSection, setActiveSection] = useState<AdminSection>('generate');
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
   const [links, setLinks] = useState<ServiceLink[]>([]);
   const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
   const [signatureConfig, setSignatureConfig] = useState<SignatureConfigSettings | null>(null);
@@ -71,18 +82,40 @@ export function AdminDashboard({
 
   return (
     <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
-      {/* Header & Summary Numbers */}
-      <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-8">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#9A7835] mb-1">
-            Painel Administrativo · {mode === 'firebase' ? 'Nuvem Firebase' : 'Sessão Local Segura'}
-          </p>
-          <h1 className="font-display text-2xl sm:text-3xl font-bold text-[#0B1D3A]">
-            Gestão de Atendimentos Jurídicos
-          </h1>
+      <AdminSidebarDrawer
+        isOpen={drawerOpen}
+        activeSection={activeSection}
+        documentsCount={links.length}
+        clientsCount={links.length}
+        onClose={() => setDrawerOpen(false)}
+        onSelectSection={setActiveSection}
+      />
+
+      {/* Top-left Hamburger Menu + Section Header + Summary Numbers */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8 pb-5 border-b border-slate-200">
+        <div className="flex items-start sm:items-center gap-3.5">
+          <button
+            type="button"
+            aria-label="Abrir menu administrativo"
+            aria-expanded={drawerOpen}
+            onClick={() => setDrawerOpen(true)}
+            className="min-h-[48px] min-w-[48px] px-3 rounded-xl border border-slate-300 bg-white text-[#0B1D3A] hover:bg-slate-50 inline-flex items-center justify-center gap-2 shrink-0 transition-colors"
+          >
+            <Menu className="w-5 h-5" aria-hidden="true" />
+            <span className="hidden sm:inline text-sm font-semibold">Menu</span>
+          </button>
+
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#9A7835] mb-0.5">
+              Painel Administrativo · {mode === 'firebase' ? 'Nuvem Firebase' : 'Sessão Local Segura'}
+            </p>
+            <h1 className="font-display text-2xl sm:text-3xl font-bold text-[#0B1D3A]">
+              {SECTION_LABELS[activeSection]}
+            </h1>
+          </div>
         </div>
 
-        <div className="flex items-center gap-6 text-sm tabular-nums border border-slate-200 bg-white rounded-xl px-5 py-3">
+        <div className="flex items-center gap-6 text-sm tabular-nums border border-slate-200 bg-white rounded-xl px-5 py-3 self-start md:self-auto">
           <div>
             <span className="block text-xs text-slate-500">Aguardando</span>
             <span className="text-lg font-bold text-[#0B1D3A]">{pendingCount}</span>
@@ -100,65 +133,13 @@ export function AdminDashboard({
         </div>
       </div>
 
-      {/* 3-Tab Navigation */}
-      <div
-        role="tablist"
-        aria-label="Seções administrativas"
-        className="flex items-center gap-2 border-b border-slate-200 mb-6 overflow-x-auto"
-      >
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === 'generate'}
-          onClick={() => setActiveTab('generate')}
-          className={`inline-flex items-center gap-2 min-h-[48px] px-4 py-2.5 text-sm font-semibold border-b-2 whitespace-nowrap shrink-0 transition-colors ${
-            activeTab === 'generate'
-              ? 'border-[#B8934A] text-[#0B1D3A]'
-              : 'border-transparent text-slate-600 hover:text-[#0B1D3A]'
-          }`}
-        >
-          <Link2 className="w-4 h-4" aria-hidden="true" />
-          Gerar Link
-        </button>
-
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === 'links'}
-          onClick={() => setActiveTab('links')}
-          className={`inline-flex items-center gap-2 min-h-[48px] px-4 py-2.5 text-sm font-semibold border-b-2 whitespace-nowrap shrink-0 transition-colors ${
-            activeTab === 'links'
-              ? 'border-[#B8934A] text-[#0B1D3A]'
-              : 'border-transparent text-slate-600 hover:text-[#0B1D3A]'
-          }`}
-        >
-          <FileText className="w-4 h-4" aria-hidden="true" />
-          Documentos Recebidos ({links.length})
-        </button>
-
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === 'cms'}
-          onClick={() => setActiveTab('cms')}
-          className={`inline-flex items-center gap-2 min-h-[48px] px-4 py-2.5 text-sm font-semibold border-b-2 whitespace-nowrap shrink-0 transition-colors ${
-            activeTab === 'cms'
-              ? 'border-[#B8934A] text-[#0B1D3A]'
-              : 'border-transparent text-slate-600 hover:text-[#0B1D3A]'
-          }`}
-        >
-          <PenTool className="w-4 h-4" aria-hidden="true" />
-          Modelos e Timbrado
-        </button>
-      </div>
-
       {loading ? (
         <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center text-sm text-slate-500">
           Carregando painel administrativo...
         </div>
       ) : (
         <>
-          {activeTab === 'generate' && (
+          {activeSection === 'generate' && (
             <AdminLinkGenerator
               templates={templates}
               onLinkCreated={() => {
@@ -167,7 +148,7 @@ export function AdminDashboard({
             />
           )}
 
-          {activeTab === 'links' && (
+          {activeSection === 'links' && (
             <AdminLinksManager
               links={links}
               onDeleteLink={async (link) => {
@@ -176,12 +157,12 @@ export function AdminDashboard({
             />
           )}
 
-          {activeTab === 'cms' && signatureConfig && (
+          {activeSection === 'clients' && <AdminClientsView links={links} />}
+
+          {activeSection === 'cms' && (
             <AdminCmsEditor
               templates={templates}
               letterhead={letterhead}
-              signatureConfig={signatureConfig}
-              signatureServerConfig={signatureServerConfig}
               onSaveTemplate={async (tpl) => {
                 const saved = await dataService.saveTemplate(tpl);
                 setTemplates((prev) => {
@@ -202,6 +183,13 @@ export function AdminDashboard({
                 const saved = await dataService.saveLetterhead(settings);
                 onLetterheadUpdated(saved);
               }}
+            />
+          )}
+
+          {activeSection === 'signature' && signatureConfig && (
+            <AdminSignatureSettings
+              signatureConfig={signatureConfig}
+              signatureServerConfig={signatureServerConfig}
               onSaveSignatureConfig={async (cfg) => {
                 const saved = await dataService.saveSignatureConfig(cfg);
                 setSignatureConfig(saved);

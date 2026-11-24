@@ -61,14 +61,22 @@ service cloud.firestore {
 
     function isValidLetterhead(data) {
       return data.keys().hasAll(['officeTitle', 'oabNumber', 'addressFooter', 'phone', 'email', 'updatedAt', 'updatedBy']) &&
-        data.keys().hasOnly(['officeTitle', 'oabNumber', 'subtitle', 'addressFooter', 'phone', 'email', 'instagram', 'updatedAt', 'updatedBy']) &&
+        data.keys().hasOnly([
+          'officeTitle', 'oabNumber', 'subtitle', 'headerAlignment',
+          'addressFooter', 'phone', 'email', 'instagram', 'website',
+          'logoDataUrl', 'sealDataUrl', 'updatedAt', 'updatedBy'
+        ]) &&
         data.officeTitle is string && data.officeTitle.size() >= 2 && data.officeTitle.size() <= 160 &&
         data.oabNumber is string && data.oabNumber.size() >= 2 && data.oabNumber.size() <= 60 &&
         (!('subtitle' in data) || (data.subtitle is string && data.subtitle.size() <= 160)) &&
+        (!('headerAlignment' in data) || data.headerAlignment in ['left', 'center', 'right']) &&
         data.addressFooter is string && data.addressFooter.size() >= 5 && data.addressFooter.size() <= 300 &&
         data.phone is string && data.phone.size() >= 4 && data.phone.size() <= 40 &&
         data.email is string && data.email.size() >= 3 && data.email.size() <= 120 &&
         (!('instagram' in data) || (data.instagram is string && data.instagram.size() <= 80)) &&
+        (!('website' in data) || (data.website is string && data.website.size() <= 160)) &&
+        (!('logoDataUrl' in data) || data.logoDataUrl == null || (data.logoDataUrl is string && data.logoDataUrl.size() <= 350000)) &&
+        (!('sealDataUrl' in data) || data.sealDataUrl == null || (data.sealDataUrl is string && data.sealDataUrl.size() <= 350000)) &&
         data.updatedAt is timestamp &&
         data.updatedBy is string && data.updatedBy.size() >= 1 && data.updatedBy.size() <= 128;
     }
@@ -86,12 +94,20 @@ service cloud.firestore {
 
     function isValidTemplate(data) {
       return data.keys().hasAll(['id', 'title', 'category', 'content', 'isDefault', 'ownerUid', 'createdAt', 'updatedAt']) &&
-        data.keys().hasOnly(['id', 'title', 'category', 'content', 'isDefault', 'ownerUid', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'title', 'category', 'content', 'isDefault', 'customFields', 'ownerUid', 'createdAt', 'updatedAt']) &&
         isValidId(data.id) &&
         data.title is string && data.title.size() >= 2 && data.title.size() <= 140 &&
         data.category is string && data.category.size() >= 2 && data.category.size() <= 80 &&
         data.content is string && data.content.size() >= 10 && data.content.size() <= 30000 &&
         data.isDefault is bool &&
+        (!('customFields' in data) || (
+          data.customFields is list &&
+          data.customFields.size() <= 50 &&
+          (data.customFields.size() == 0 || (
+            data.customFields[0] is map &&
+            data.customFields[0].keys().hasAll(['key', 'tag', 'label', 'fieldType'])
+          ))
+        )) &&
         isValidId(data.ownerUid) &&
         data.createdAt is timestamp &&
         data.updatedAt is timestamp;
