@@ -1,0 +1,202 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net (Default Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // -------------------------------------------------------------------------
+    // Shared Security Primitives
+    // -------------------------------------------------------------------------
+    function isValidId(id) {
+      return id is string && id.size() >= 2 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidTokenId(id) {
+      return id is string && id.size() >= 12 && id.size() <= 64 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isEmailVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isBootstrappedAdmin() {
+      return isEmailVerified() && request.auth.token.email == 'eduh.asl@gmail.com';
+    }
+
+    function isAdmin() {
+      return isBootstrappedAdmin() || (
+        isEmailVerified() &&
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    // -------------------------------------------------------------------------
+    // Entity Validation Blueprints
+    // -------------------------------------------------------------------------
+    function isValidAdminUser(data) {
+      return data.keys().hasAll(['uid', 'email', 'displayName', 'createdAt']) &&
+        data.keys().hasOnly(['uid', 'email', 'displayName', 'oabNumber', 'createdAt']) &&
+        isValidId(data.uid) &&
+        data.email is string && data.email.size() >= 3 && data.email.size() <= 160 &&
+        data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 120 &&
+        (!('oabNumber' in data) || (data.oabNumber is string && data.oabNumber.size() <= 40)) &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidLetterhead(data) {
+      return data.keys().hasAll(['officeTitle', 'oabNumber', 'addressFooter', 'phone', 'email', 'updatedAt', 'updatedBy']) &&
+        data.keys().hasOnly(['officeTitle', 'oabNumber', 'subtitle', 'addressFooter', 'phone', 'email', 'instagram', 'updatedAt', 'updatedBy']) &&
+        data.officeTitle is string && data.officeTitle.size() >= 2 && data.officeTitle.size() <= 160 &&
+        data.oabNumber is string && data.oabNumber.size() >= 2 && data.oabNumber.size() <= 60 &&
+        (!('subtitle' in data) || (data.subtitle is string && data.subtitle.size() <= 160)) &&
+        data.addressFooter is string && data.addressFooter.size() >= 5 && data.addressFooter.size() <= 300 &&
+        data.phone is string && data.phone.size() >= 4 && data.phone.size() <= 40 &&
+        data.email is string && data.email.size() >= 3 && data.email.size() <= 120 &&
+        (!('instagram' in data) || (data.instagram is string && data.instagram.size() <= 80)) &&
+        data.updatedAt is timestamp &&
+        data.updatedBy is string && data.updatedBy.size() >= 1 && data.updatedBy.size() <= 128;
+    }
+
+    function isValidSignatureConfig(data) {
+      return data.keys().hasAll(['defaultProvider', 'clicksignEnabled', 'docusignEnabled', 'govbrEnabled', 'updatedAt', 'updatedBy']) &&
+        data.keys().hasOnly(['defaultProvider', 'clicksignEnabled', 'docusignEnabled', 'govbrEnabled', 'updatedAt', 'updatedBy']) &&
+        data.defaultProvider in ['clicksign', 'docusign'] &&
+        data.clicksignEnabled is bool &&
+        data.docusignEnabled is bool &&
+        data.govbrEnabled is bool &&
+        data.updatedAt is timestamp &&
+        data.updatedBy is string && data.updatedBy.size() >= 1 && data.updatedBy.size() <= 128;
+    }
+
+    function isValidTemplate(data) {
+      return data.keys().hasAll(['id', 'title', 'category', 'content', 'isDefault', 'ownerUid', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'title', 'category', 'content', 'isDefault', 'ownerUid', 'createdAt', 'updatedAt']) &&
+        isValidId(data.id) &&
+        data.title is string && data.title.size() >= 2 && data.title.size() <= 140 &&
+        data.category is string && data.category.size() >= 2 && data.category.size() <= 80 &&
+        data.content is string && data.content.size() >= 10 && data.content.size() <= 30000 &&
+        data.isDefault is bool &&
+        isValidId(data.ownerUid) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidServiceLink(data) {
+      return data.keys().hasAll(['tokenId', 'clientName', 'whatsapp', 'pin', 'templateId', 'templateTitle', 'status', 'signatureMethod', 'ownerUid', 'createdAt']) &&
+        data.keys().hasOnly([
+          'tokenId', 'clientName', 'whatsapp', 'pin', 'templateId', 'templateTitle',
+          'status', 'signatureMethod', 'signatureEnvelopeId', 'signatureAuditHash',
+          'signedPdfUrl', 'signedPdfStoragePath', 'signedPdfName', 'ownerUid',
+          'createdAt', 'completedAt'
+        ]) &&
+        isValidTokenId(data.tokenId) &&
+        data.clientName is string && data.clientName.size() >= 2 && data.clientName.size() <= 120 &&
+        data.whatsapp is string && data.whatsapp.size() >= 8 && data.whatsapp.size() <= 25 &&
+        data.pin is string && data.pin.matches('^[0-9]{4}$') &&
+        isValidId(data.templateId) &&
+        data.templateTitle is string && data.templateTitle.size() >= 2 && data.templateTitle.size() <= 140 &&
+        data.status in ['pendente', 'assinando', 'concluido'] &&
+        data.signatureMethod in ['none', 'govbr', 'clicksign', 'docusign'] &&
+        (!('signatureEnvelopeId' in data) || data.signatureEnvelopeId == null || (data.signatureEnvelopeId is string && data.signatureEnvelopeId.size() <= 128)) &&
+        (!('signatureAuditHash' in data) || data.signatureAuditHash == null || (data.signatureAuditHash is string && data.signatureAuditHash.size() <= 128)) &&
+        (!('signedPdfUrl' in data) || data.signedPdfUrl == null || (data.signedPdfUrl is string && data.signedPdfUrl.size() <= 2000)) &&
+        (!('signedPdfStoragePath' in data) || data.signedPdfStoragePath == null || (data.signedPdfStoragePath is string && data.signedPdfStoragePath.size() <= 300)) &&
+        (!('signedPdfName' in data) || data.signedPdfName == null || (data.signedPdfName is string && data.signedPdfName.size() <= 200)) &&
+        isValidId(data.ownerUid) &&
+        data.createdAt is timestamp &&
+        (!('completedAt' in data) || data.completedAt == null || data.completedAt is timestamp);
+    }
+
+    // -------------------------------------------------------------------------
+    // Collection Rules
+    // -------------------------------------------------------------------------
+    match /test/connection {
+      allow get: if isSignedIn();
+    }
+
+    match /admins/{adminUid} {
+      allow get: if isAdmin() && isValidId(adminUid);
+      allow list: if isAdmin();
+      allow create: if isBootstrappedAdmin() && isValidId(adminUid) && isValidAdminUser(incoming()) && incoming().uid == adminUid && incoming().createdAt == request.time;
+      allow update: if isBootstrappedAdmin() && isValidId(adminUid) && isValidAdminUser(incoming()) && incoming().uid == existing().uid && incoming().createdAt == existing().createdAt;
+      allow delete: if isBootstrappedAdmin() && isValidId(adminUid);
+    }
+
+    match /settings/{settingId} {
+      allow get: if isAdmin() || (settingId in ['letterhead', 'signatureConfig']);
+      allow list: if isAdmin();
+      allow create, update: if isAdmin() && isValidId(settingId) && (
+        (settingId == 'letterhead' && isValidLetterhead(incoming()) && incoming().updatedAt == request.time && incoming().updatedBy == request.auth.uid) ||
+        (settingId == 'signatureConfig' && isValidSignatureConfig(incoming()) && incoming().updatedAt == request.time && incoming().updatedBy == request.auth.uid)
+      );
+      allow delete: if false;
+    }
+
+    match /templates/{templateId} {
+      allow get: if isAdmin() || isValidId(templateId);
+      allow list: if isAdmin();
+      allow create: if isAdmin() && isValidId(templateId) && isValidTemplate(incoming()) &&
+        incoming().id == templateId &&
+        incoming().ownerUid == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isAdmin() && isValidId(templateId) && isValidTemplate(incoming()) &&
+        incoming().id == existing().id &&
+        incoming().ownerUid == existing().ownerUid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time;
+      allow delete: if isAdmin() && isValidId(templateId);
+    }
+
+    match /serviceLinks/{tokenId} {
+      allow get: if isAdmin() || isValidTokenId(tokenId);
+      allow list: if isAdmin();
+      allow create: if isAdmin() && isValidTokenId(tokenId) && isValidServiceLink(incoming()) &&
+        incoming().tokenId == tokenId &&
+        incoming().ownerUid == request.auth.uid &&
+        incoming().status == 'pendente' &&
+        incoming().signatureMethod == 'none' &&
+        incoming().createdAt == request.time;
+      allow update: if isValidTokenId(tokenId) && isValidServiceLink(incoming()) &&
+        incoming().tokenId == existing().tokenId &&
+        incoming().ownerUid == existing().ownerUid &&
+        incoming().createdAt == existing().createdAt && (
+          isAdmin() || (
+            existing().status != 'concluido' &&
+            incoming().clientName == existing().clientName &&
+            incoming().whatsapp == existing().whatsapp &&
+            incoming().pin == existing().pin &&
+            incoming().templateId == existing().templateId &&
+            incoming().templateTitle == existing().templateTitle &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'status', 'signatureMethod', 'signatureEnvelopeId', 'signatureAuditHash',
+              'signedPdfUrl', 'signedPdfStoragePath', 'signedPdfName', 'completedAt'
+            ]) && (
+              (incoming().status == 'assinando' && (!('completedAt' in incoming()) || incoming().completedAt == null)) ||
+              (incoming().status == 'concluido' &&
+               incoming().completedAt == request.time &&
+               incoming().signedPdfUrl is string &&
+               incoming().signedPdfUrl.size() >= 10)
+            )
+          )
+        );
+      allow delete: if isAdmin() && isValidId(tokenId);
+    }
+  }
+}

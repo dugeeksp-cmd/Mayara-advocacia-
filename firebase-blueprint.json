@@ -1,0 +1,292 @@
+{
+  "entities": {
+    "AdminUser": {
+      "title": "AdminUser",
+      "description": "Authorized lawyer/administrator profile linked to Firebase Auth UID.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 160
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "oabNumber": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "email", "displayName", "createdAt"]
+    },
+    "LetterheadSettings": {
+      "title": "LetterheadSettings",
+      "description": "Office institutional letterhead and footer configuration.",
+      "type": "object",
+      "properties": {
+        "officeTitle": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 160
+        },
+        "oabNumber": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 60
+        },
+        "subtitle": {
+          "type": "string",
+          "maxLength": 160
+        },
+        "addressFooter": {
+          "type": "string",
+          "minLength": 5,
+          "maxLength": 300
+        },
+        "phone": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "email": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "instagram": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedBy": {
+          "type": "string",
+          "maxLength": 128
+        }
+      },
+      "required": [
+        "officeTitle",
+        "oabNumber",
+        "addressFooter",
+        "phone",
+        "email",
+        "updatedAt",
+        "updatedBy"
+      ]
+    },
+    "SignatureConfigSettings": {
+      "title": "SignatureConfigSettings",
+      "description": "Integrated electronic signature provider settings (Clicksign / DocuSign / Gov.br).",
+      "type": "object",
+      "properties": {
+        "defaultProvider": {
+          "type": "string",
+          "enum": ["clicksign", "docusign"]
+        },
+        "clicksignEnabled": {
+          "type": "boolean"
+        },
+        "docusignEnabled": {
+          "type": "boolean"
+        },
+        "govbrEnabled": {
+          "type": "boolean"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedBy": {
+          "type": "string",
+          "maxLength": 128
+        }
+      },
+      "required": [
+        "defaultProvider",
+        "clicksignEnabled",
+        "docusignEnabled",
+        "govbrEnabled",
+        "updatedAt",
+        "updatedBy"
+      ]
+    },
+    "DocumentTemplate": {
+      "title": "DocumentTemplate",
+      "description": "Reusable legal document template with dynamic placeholder tags.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 140
+        },
+        "category": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 80
+        },
+        "content": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 30000
+        },
+        "isDefault": {
+          "type": "boolean"
+        },
+        "ownerUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "category",
+        "content",
+        "isDefault",
+        "ownerUid",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "ServiceLink": {
+      "title": "ServiceLink",
+      "description": "Temporary client service link metadata (Zero-Retention LGPD: never stores CPF, RG, address, or personal answers).",
+      "type": "object",
+      "properties": {
+        "tokenId": {
+          "type": "string",
+          "minLength": 12,
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "clientName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 120
+        },
+        "whatsapp": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 25
+        },
+        "pin": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 4,
+          "pattern": "^[0-9]{4}$"
+        },
+        "templateId": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "templateTitle": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 140
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pendente", "assinando", "concluido"]
+        },
+        "signatureMethod": {
+          "type": "string",
+          "enum": ["none", "govbr", "clicksign", "docusign"]
+        },
+        "signatureEnvelopeId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "signatureAuditHash": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "signedPdfUrl": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "signedPdfStoragePath": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "signedPdfName": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "ownerUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "completedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "tokenId",
+        "clientName",
+        "whatsapp",
+        "pin",
+        "templateId",
+        "templateTitle",
+        "status",
+        "signatureMethod",
+        "ownerUid",
+        "createdAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/admins/{adminUid}": {
+      "schema": { "$ref": "#/entities/AdminUser" },
+      "description": "Authorized office administrator documents."
+    },
+    "/settings/{settingId}": {
+      "schema": { "$ref": "#/entities/LetterheadSettings" },
+      "description": "Global office configuration documents (letterhead and signatureConfig)."
+    },
+    "/templates/{templateId}": {
+      "schema": { "$ref": "#/entities/DocumentTemplate" },
+      "description": "Legal document templates managed by the office."
+    },
+    "/serviceLinks/{tokenId}": {
+      "schema": { "$ref": "#/entities/ServiceLink" },
+      "description": "One-time client service links with PIN and signed PDF metadata."
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "Mayara Martins Advocacia — Portal Jurídico",
+  "description": "Sistema de automação, geração e assinatura eletrônica de documentos jurídicos com privacidade LGPD Zero-Retention para o escritório Mayara Martins Advocacia (OAB/RJ 229.359).",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,40 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Default deny
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+
+    // Signed legal PDFs uploaded per one-time service link token
+    match /signed-documents/{tokenId}/{fileName} {
+      function isAdminUser() {
+        return request.auth != null &&
+          request.auth.token.email_verified == true &&
+          request.auth.token.email == 'eduh.asl@gmail.com';
+      }
+
+      function linkDoc() {
+        return firestore.get(/databases/(ai-studio-a1d6358c-aced-44f2-8e00-de277e688d42)/documents/serviceLinks/$(tokenId));
+      }
+
+      // Only the admin or someone presenting the exact tokenId may read/download the signed PDF
+      allow read: if isAdminUser() || (tokenId.size() >= 12 && tokenId.matches('^[a-zA-Z0-9_\\-]+$'));
+
+      // Clients may upload a single PDF up to 10 MB while the link is still active (not yet concluido)
+      allow create: if tokenId.size() >= 12 &&
+        tokenId.matches('^[a-zA-Z0-9_\\-]+$') &&
+        fileName.size() <= 180 &&
+        fileName.matches('^[a-zA-Z0-9_.\\-]+\\.pdf$') &&
+        request.resource != null &&
+        request.resource.size > 0 &&
+        request.resource.size <= 10 * 1024 * 1024 &&
+        request.resource.contentType == 'application/pdf' &&
+        linkDoc().data.status != 'concluido';
+
+      // Only admin can overwrite or delete archived PDFs
+      allow update, delete: if isAdminUser();
+    }
+  }
+}
