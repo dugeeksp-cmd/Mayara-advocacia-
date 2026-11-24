@@ -1,0 +1,34 @@
+.name: Compilar Site para Download
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Baixar código do repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Instalar dependências
+        run: npm install
+
+      - name: Compilar projeto (Build)
+        run: npm run build
+        env:
+          # Se o seu projeto usa variáveis de ambiente no frontend, adicione os Secrets abaixo:
+          VITE_GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+
+      - name: Empacotar pasta dist para download
+        uses: actions/upload-artifact@v4
+        with:
+          name: site-pronto-public-html
+          path: dist/
