@@ -173,6 +173,7 @@ export function ClientLayerForm({
       const artifact = await generateLegalDocumentPdf({
         documentTitle: template.title,
         renderedText,
+        bodyFontSizePx: template.bodyFontSizePx,
         letterhead,
         header,
         footer,

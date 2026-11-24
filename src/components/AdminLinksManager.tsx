@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   CheckCircle2,
   Clock,
@@ -13,6 +13,7 @@ import { formatDateTimeBR } from '../utils/masksAndFormatters';
 
 interface AdminLinksManagerProps {
   links: ServiceLink[];
+  initialFilter?: 'all' | ServiceLinkStatus;
   onDeleteLink: (link: ServiceLink) => Promise<void>;
   onOpenClientSummary: (link: ServiceLink) => void;
 }
@@ -24,14 +25,19 @@ const METHOD_LABELS: Record<ServiceLink['signatureMethod'], string> = {
 
 export function AdminLinksManager({
   links,
+  initialFilter = 'all',
   onDeleteLink,
   onOpenClientSummary,
 }: AdminLinksManagerProps) {
-  const [filter, setFilter] = useState<'all' | ServiceLinkStatus>('all');
+  const [filter, setFilter] = useState<'all' | ServiceLinkStatus>(initialFilter);
   const [searchTerm, setSearchTerm] = useState('');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setFilter(initialFilter);
+  }, [initialFilter]);
 
   const filteredLinks = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();

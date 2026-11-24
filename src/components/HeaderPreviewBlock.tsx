@@ -6,8 +6,10 @@ import type {
 import { resolveHeaderLayout } from '../utils/headerLayout';
 import {
   getFontOption,
-  getSizeOption,
   normalizeHexColor,
+  resolveHeaderFontSizePx,
+  resolveHeaderLogoSizePx,
+  resolveHeaderSubFontSizePx,
 } from '../utils/timbradoTheme';
 
 interface HeaderPreviewBlockProps {
@@ -21,6 +23,8 @@ interface HeaderPreviewBlockProps {
     | 'textPosition'
     | 'fontFamily'
     | 'textSize'
+    | 'fontSizePx'
+    | 'logoSizePx'
     | 'textColor'
   >;
   logo?: LogoAsset | null;
@@ -49,7 +53,9 @@ export function HeaderPreviewBlock({
   showSkeletonBody = false,
 }: HeaderPreviewBlockProps) {
   const fontOpt = getFontOption(header.fontFamily);
-  const sizeOpt = getSizeOption(header.textSize);
+  const titlePx = resolveHeaderFontSizePx(header);
+  const subPx = resolveHeaderSubFontSizePx(titlePx);
+  const logoWidthPx = resolveHeaderLogoSizePx(header);
   const colorHex = normalizeHexColor(header.textColor, '#0B1D3A');
   const layout = resolveHeaderLayout(header);
 
@@ -60,14 +66,24 @@ export function HeaderPreviewBlock({
     <img
       src={logo.dataUrl}
       alt={logo.name || 'Logotipo'}
-      className="h-12 w-auto max-w-[120px] object-contain shrink-0"
+      style={{
+        width: `${logoWidthPx}px`,
+        height: 'auto',
+        maxWidth: layout.textPosition === 'beside' ? '54%' : '100%',
+      }}
+      className="object-contain shrink-0 transition-[width] duration-75"
     />
   ) : showLogoPlaceholderIfEmpty ? (
     <div
-      className="h-12 w-12 rounded-lg border border-dashed border-[#B8934A] bg-[#F7F1E3]/60 flex items-center justify-center text-[10px] font-bold uppercase tracking-wider text-[#9A7835] shrink-0"
+      style={{
+        width: `${logoWidthPx}px`,
+        height: `${Math.max(36, Math.round(logoWidthPx * 0.42))}px`,
+        maxWidth: layout.textPosition === 'beside' ? '54%' : '100%',
+      }}
+      className="rounded-lg border border-dashed border-[#B8934A] bg-[#F7F1E3]/60 flex items-center justify-center text-[10px] font-bold uppercase tracking-wider text-[#9A7835] shrink-0 transition-all duration-75"
       aria-label="Posição da logomarca"
     >
-      Logo
+      Logo ({logoWidthPx}px)
     </div>
   ) : null;
 
@@ -83,7 +99,7 @@ export function HeaderPreviewBlock({
         <p
           className="font-bold uppercase leading-snug"
           style={{
-            fontSize: `${sizeOpt.headerTitleCssPx}px`,
+            fontSize: `${titlePx}px`,
             color: colorHex,
           }}
         >
@@ -91,7 +107,7 @@ export function HeaderPreviewBlock({
         </p>
         <p
           className="font-semibold text-[#9A7835] mt-1"
-          style={{ fontSize: `${sizeOpt.headerSubCssPx}px` }}
+          style={{ fontSize: `${subPx}px` }}
         >
           {header.oabNumber}
           {header.subtitle ? ` | ${header.subtitle}` : ''}

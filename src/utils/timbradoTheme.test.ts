@@ -1,13 +1,34 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  BODY_FONT_MAX_PX,
+  BODY_FONT_MIN_PX,
+  bodyPxToPdfPt,
+  clampPx,
+  DEFAULT_BODY_FONT_PX,
   DEFAULT_FOOTERS,
   DEFAULT_HEADERS,
+  DEFAULT_LOGO_SIZE_PX,
   deriveLetterheadFromProfiles,
+  FOOTER_FONT_MAX_PX,
+  FOOTER_FONT_MIN_PX,
+  footerPxToPdfPt,
   getFontOption,
   getSizeOption,
+  HEADER_FONT_MAX_PX,
+  HEADER_FONT_MIN_PX,
+  headerPxToPdfPt,
   hexToRgb,
+  LOGO_SIZE_MAX_PX,
+  LOGO_SIZE_MIN_PX,
+  logoPxToPdfTargetWidthMm,
   normalizeHexColor,
+  pxToLegacyTextSize,
+  resolveFooterFontSizePx,
+  resolveHeaderFontSizePx,
+  resolveHeaderLogoSizePx,
+  resolveHeaderSubFontSizePx,
+  resolveTemplateBodyFontSizePx,
   resolveTemplateTimbrado,
 } from './timbradoTheme.ts';
 import { DEFAULT_LETTERHEAD } from './templateEngine.ts';
@@ -25,6 +46,42 @@ test('getFontOption and getSizeOption return deterministic PDF and CSS mappings'
   assert.equal(getFontOption('lora').pdfFamily, 'times');
   assert.equal(getSizeOption('large').headerTitlePdfPt, 14.5);
   assert.equal(getSizeOption('small').footerPdfPt, 7);
+});
+
+test('pixel clamping and legacy textSize fallbacks work deterministically', () => {
+  assert.equal(clampPx(5, HEADER_FONT_MIN_PX, HEADER_FONT_MAX_PX, 14), 8);
+  assert.equal(clampPx(99, HEADER_FONT_MIN_PX, HEADER_FONT_MAX_PX, 14), 36);
+  assert.equal(clampPx(18.6, BODY_FONT_MIN_PX, BODY_FONT_MAX_PX, 14), 19);
+  assert.equal(clampPx(Number.NaN, 10, 20, DEFAULT_BODY_FONT_PX), 14);
+
+  assert.equal(resolveHeaderFontSizePx({ textSize: 'small' }), 12);
+  assert.equal(resolveHeaderFontSizePx({ textSize: 'large' }), 17);
+  assert.equal(resolveHeaderFontSizePx({ fontSizePx: 22, textSize: 'small' }), 22);
+  assert.equal(resolveHeaderSubFontSizePx(20), 16);
+
+  assert.equal(resolveHeaderLogoSizePx(null), DEFAULT_LOGO_SIZE_PX);
+  assert.equal(resolveHeaderLogoSizePx({ logoSizePx: 25 }), LOGO_SIZE_MIN_PX);
+  assert.equal(resolveHeaderLogoSizePx({ logoSizePx: 500 }), LOGO_SIZE_MAX_PX);
+  assert.equal(resolveHeaderLogoSizePx({ logoSizePx: 185 }), 185);
+
+  assert.equal(resolveFooterFontSizePx({ textSize: 'small' }), 10);
+  assert.equal(resolveFooterFontSizePx({ fontSizePx: 42 }), FOOTER_FONT_MAX_PX);
+  assert.equal(resolveFooterFontSizePx({ fontSizePx: 2 }), FOOTER_FONT_MIN_PX);
+
+  assert.equal(resolveTemplateBodyFontSizePx(undefined), DEFAULT_BODY_FONT_PX);
+  assert.equal(resolveTemplateBodyFontSizePx({ bodyFontSizePx: 18 }), 18);
+  assert.equal(pxToLegacyTextSize(11), 'small');
+  assert.equal(pxToLegacyTextSize(14), 'medium');
+  assert.equal(pxToLegacyTextSize(19), 'large');
+});
+
+test('pixel-to-PDF conversion helpers produce proportional point and millimeter dimensions', () => {
+  const hdrPts = headerPxToPdfPt(20);
+  assert.ok(hdrPts.titlePt > hdrPts.subPt);
+  assert.ok(footerPxToPdfPt(16) > footerPxToPdfPt(10));
+  assert.ok(bodyPxToPdfPt(18) > bodyPxToPdfPt(12));
+  assert.ok(logoPxToPdfTargetWidthMm(200) > logoPxToPdfTargetWidthMm(80));
+  assert.ok(logoPxToPdfTargetWidthMm(350, 70) <= 70);
 });
 
 test('resolveTemplateTimbrado honors explicit null ("Sem cabeçalho/rodapé/logotipo")', () => {

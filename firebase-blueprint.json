@@ -55,6 +55,8 @@
           "enum": ["playfair", "inter", "times", "georgia", "montserrat", "lora"]
         },
         "textSize": { "type": "string", "enum": ["small", "medium", "large"] },
+        "fontSizePx": { "type": "number" },
+        "logoSizePx": { "type": "number" },
         "textColor": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
         "isDefault": { "type": "boolean" },
         "officeId": { "type": "string", "maxLength": 64 },
@@ -101,6 +103,7 @@
           "enum": ["playfair", "inter", "times", "georgia", "montserrat", "lora"]
         },
         "textSize": { "type": "string", "enum": ["small", "medium", "large"] },
+        "fontSizePx": { "type": "number" },
         "textColor": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
         "isDefault": { "type": "boolean" },
         "officeId": { "type": "string", "maxLength": 64 },
@@ -223,6 +226,7 @@
         "content": { "type": "string", "minLength": 10, "maxLength": 30000 },
         "isDefault": { "type": "boolean" },
         "customFields": { "type": "array" },
+        "bodyFontSizePx": { "type": "number" },
         "headerId": { "type": "string", "maxLength": 128 },
         "footerId": { "type": "string", "maxLength": 128 },
         "logoId": { "type": "string", "maxLength": 128 },

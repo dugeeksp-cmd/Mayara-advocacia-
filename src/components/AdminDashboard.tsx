@@ -8,6 +8,7 @@ import type {
   LetterheadSettings,
   LogoAsset,
   ServiceLink,
+  ServiceLinkStatus,
   SignatureConfigSettings,
 } from '../types/legal';
 import {
@@ -16,16 +17,21 @@ import {
   type CloudSyncState,
 } from '../services/dataService';
 import {
+  buildTemplateValuesFromClient,
   buildUnifiedClientEntries,
   type UnifiedClientEntry,
 } from '../utils/legalFieldOptions';
+import { interpolateTemplate } from '../utils/templateEngine';
 import {
   DEFAULT_FOOTERS,
   DEFAULT_HEADERS,
   DEFAULT_LOGOS,
   deriveLetterheadFromProfiles,
+  resolveTemplateTimbrado,
 } from '../utils/timbradoTheme';
+import { generateLegalDocumentPdf, triggerBlobDownload } from '../utils/pdfGenerator';
 import { AdminSidebarDrawer, type AdminSection } from './AdminSidebarDrawer';
+import { AdminExecutiveOverview } from './AdminExecutiveOverview';
 import { AdminLinkGenerator } from './AdminLinkGenerator';
 import { AdminLinksManager } from './AdminLinksManager';
 import { AdminClientsView } from './AdminClientsView';
@@ -54,6 +60,7 @@ export function AdminDashboard({
   onLetterheadUpdated,
 }: AdminDashboardProps) {
   const [activeSection, setActiveSection] = useState<AdminSection>('generate');
+  const [linksInitialFilter, setLinksInitialFilter] = useState<'all' | ServiceLinkStatus>('all');
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const [links, setLinks] = useState<ServiceLink[]>([]);
@@ -195,6 +202,69 @@ export function AdminDashboard({
     setSummaryKey(bucketKey);
   }
 
+  async function handleQuickDownloadReviewPdf(link: ServiceLink) {
+    if (link.signedPdfUrl && !link.signedPdfUrl.startsWith('https://storage.local/')) {
+      const anchor = document.createElement('a');
+      anchor.href = link.signedPdfUrl;
+      anchor.download = link.signedPdfName || `Documento_${link.clientName}.pdf`;
+      if (!link.signedPdfUrl.startsWith('data:')) {
+        anchor.target = '_blank';
+        anchor.rel = 'noopener noreferrer';
+      }
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      return;
+    }
+
+    const match = unifiedEntries.find((entry) =>
+      entry.linkedDocs.some((docItem) => docItem.tokenId === link.tokenId)
+    );
+    const client = match?.clientRecord;
+    const tpl =
+      templates.find((t) => t.id === link.templateId) ||
+      templates.find((t) => t.title === link.templateTitle) ||
+      templates[0];
+
+    if (client && tpl) {
+      const tagValues = buildTemplateValuesFromClient(client);
+      const renderedText = interpolateTemplate(
+        tpl.content,
+        tagValues,
+        new Date(link.createdAt || Date.now()),
+        tpl.customFields
+      );
+      const { header, footer, logo } = resolveTemplateTimbrado({
+        template: tpl,
+        headers,
+        footers,
+        logos,
+        fallbackLetterhead: letterhead,
+      });
+      const artifact = await generateLegalDocumentPdf({
+        documentTitle: tpl.title,
+        renderedText,
+        bodyFontSizePx: tpl.bodyFontSizePx,
+        letterhead,
+        header,
+        footer,
+        logo,
+        clientName: client.fullName,
+      });
+      triggerBlobDownload(artifact.blob, artifact.fileName);
+      return;
+    }
+
+    handleOpenClientSummaryByLink(link);
+  }
+
+  function handleNavigateSection(section: AdminSection, linkFilter?: 'all' | ServiceLinkStatus) {
+    if (section === 'links') {
+      setLinksInitialFilter(linkFilter ?? 'all');
+    }
+    setActiveSection(section);
+  }
+
   const pendingCount = links.filter((l) => l.status !== 'concluido').length;
   const completedCount = links.filter((l) => l.status === 'concluido').length;
 
@@ -206,7 +276,7 @@ export function AdminDashboard({
         documentsCount={links.length}
         clientsCount={unifiedEntries.length}
         onClose={() => setDrawerOpen(false)}
-        onSelectSection={setActiveSection}
+        onSelectSection={(sec) => handleNavigateSection(sec, 'all')}
       />
 
       {/* Top-left Hamburger Menu + Section Header + Summary Numbers */}
@@ -261,17 +331,29 @@ export function AdminDashboard({
       ) : (
         <>
           {activeSection === 'generate' && (
-            <AdminLinkGenerator
-              templates={templates}
-              onLinkCreated={() => {
-                // Live snapshot updates `links` automatically
-              }}
-            />
+            <div className="space-y-6">
+              <AdminExecutiveOverview
+                unifiedEntries={unifiedEntries}
+                links={links}
+                templates={templates}
+                onNavigateSection={handleNavigateSection}
+                onOpenClientSummary={handleOpenClientSummaryByLink}
+                onDownloadReviewPdf={handleQuickDownloadReviewPdf}
+              />
+
+              <AdminLinkGenerator
+                templates={templates}
+                onLinkCreated={() => {
+                  // Live snapshot updates `links` automatically
+                }}
+              />
+            </div>
           )}
 
           {activeSection === 'links' && (
             <AdminLinksManager
               links={links}
+              initialFilter={linksInitialFilter}
               onDeleteLink={async (link) => {
                 await dataService.deleteServiceLink(link);
               }}

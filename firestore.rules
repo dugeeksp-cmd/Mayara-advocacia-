@@ -92,7 +92,7 @@ service cloud.firestore {
         data.keys().hasOnly([
           'id', 'name', 'officeTitle', 'oabNumber', 'subtitle', 'alignment',
           'logoPosition', 'textPosition',
-          'fontFamily', 'textSize', 'textColor', 'isDefault',
+          'fontFamily', 'textSize', 'fontSizePx', 'logoSizePx', 'textColor', 'isDefault',
           'officeId', 'createdAt', 'updatedAt', 'updatedBy'
         ]) &&
         isValidId(data.id) &&
@@ -105,6 +105,8 @@ service cloud.firestore {
         (!('textPosition' in data) || isValidHeaderTextPosition(data.textPosition)) &&
         isValidFontFamily(data.fontFamily) &&
         isValidTextSize(data.textSize) &&
+        (!('fontSizePx' in data) || (data.fontSizePx is number && data.fontSizePx >= 8 && data.fontSizePx <= 36)) &&
+        (!('logoSizePx' in data) || (data.logoSizePx is number && data.logoSizePx >= 40 && data.logoSizePx <= 350)) &&
         isValidHexColor(data.textColor) &&
         data.isDefault is bool &&
         isOfficeScoped(data) &&
@@ -121,7 +123,7 @@ service cloud.firestore {
         ]) &&
         data.keys().hasOnly([
           'id', 'name', 'addressFooter', 'phone', 'email', 'instagram', 'website',
-          'alignment', 'fontFamily', 'textSize', 'textColor', 'isDefault',
+          'alignment', 'fontFamily', 'textSize', 'fontSizePx', 'textColor', 'isDefault',
           'officeId', 'createdAt', 'updatedAt', 'updatedBy'
         ]) &&
         isValidId(data.id) &&
@@ -134,6 +136,7 @@ service cloud.firestore {
         isValidAlignment(data.alignment) &&
         isValidFontFamily(data.fontFamily) &&
         isValidTextSize(data.textSize) &&
+        (!('fontSizePx' in data) || (data.fontSizePx is number && data.fontSizePx >= 8 && data.fontSizePx <= 36)) &&
         isValidHexColor(data.textColor) &&
         data.isDefault is bool &&
         isOfficeScoped(data) &&
@@ -202,7 +205,7 @@ service cloud.firestore {
       return data.keys().hasAll(['id', 'title', 'category', 'content', 'isDefault', 'ownerUid', 'createdAt', 'updatedAt']) &&
         data.keys().hasOnly([
           'id', 'title', 'category', 'content', 'isDefault', 'customFields',
-          'headerId', 'footerId', 'logoId', 'officeId',
+          'bodyFontSizePx', 'headerId', 'footerId', 'logoId', 'officeId',
           'ownerUid', 'createdAt', 'updatedAt'
         ]) &&
         isValidId(data.id) &&
@@ -218,6 +221,7 @@ service cloud.firestore {
             data.customFields[0].keys().hasAll(['key', 'tag', 'label', 'fieldType'])
           ))
         )) &&
+        (!('bodyFontSizePx' in data) || (data.bodyFontSizePx is number && data.bodyFontSizePx >= 10 && data.bodyFontSizePx <= 20)) &&
         (!('headerId' in data) || data.headerId == null || isValidId(data.headerId)) &&
         (!('footerId' in data) || data.footerId == null || isValidId(data.footerId)) &&
         (!('logoId' in data) || data.logoId == null || isValidId(data.logoId)) &&

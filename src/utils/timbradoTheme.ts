@@ -107,6 +107,111 @@ export const TIMBRADO_SIZE_OPTIONS: TimbradoSizeOption[] = [
   },
 ];
 
+export const HEADER_FONT_MIN_PX = 8;
+export const HEADER_FONT_MAX_PX = 36;
+export const DEFAULT_HEADER_FONT_PX = 14;
+
+export const FOOTER_FONT_MIN_PX = 8;
+export const FOOTER_FONT_MAX_PX = 36;
+export const DEFAULT_FOOTER_FONT_PX = 12;
+
+export const BODY_FONT_MIN_PX = 10;
+export const BODY_FONT_MAX_PX = 20;
+export const DEFAULT_BODY_FONT_PX = 14;
+
+export const LOGO_SIZE_MIN_PX = 40;
+export const LOGO_SIZE_MAX_PX = 350;
+export const DEFAULT_LOGO_SIZE_PX = 120;
+
+export function clampPx(value: number, min: number, max: number, fallback: number): number {
+  if (!Number.isFinite(value)) return fallback;
+  return Math.min(max, Math.max(min, Math.round(value)));
+}
+
+export function legacyTextSizeToHeaderPx(textSize?: TimbradoTextSize): number {
+  if (textSize === 'small') return 12;
+  if (textSize === 'large') return 17;
+  return DEFAULT_HEADER_FONT_PX;
+}
+
+export function legacyTextSizeToFooterPx(textSize?: TimbradoTextSize): number {
+  if (textSize === 'small') return 10;
+  if (textSize === 'large') return 14;
+  return DEFAULT_FOOTER_FONT_PX;
+}
+
+export function pxToLegacyTextSize(px: number): TimbradoTextSize {
+  if (px <= 12) return 'small';
+  if (px >= 16) return 'large';
+  return 'medium';
+}
+
+export function resolveHeaderFontSizePx(
+  header?: Pick<HeaderProfile, 'fontSizePx' | 'textSize'> | null
+): number {
+  if (typeof header?.fontSizePx === 'number' && Number.isFinite(header.fontSizePx)) {
+    return clampPx(header.fontSizePx, HEADER_FONT_MIN_PX, HEADER_FONT_MAX_PX, DEFAULT_HEADER_FONT_PX);
+  }
+  return legacyTextSizeToHeaderPx(header?.textSize);
+}
+
+export function resolveHeaderSubFontSizePx(titlePx: number): number {
+  return Math.max(8, Math.round(titlePx * 0.8));
+}
+
+export function resolveHeaderLogoSizePx(
+  header?: Pick<HeaderProfile, 'logoSizePx'> | null
+): number {
+  if (typeof header?.logoSizePx === 'number' && Number.isFinite(header.logoSizePx)) {
+    return clampPx(header.logoSizePx, LOGO_SIZE_MIN_PX, LOGO_SIZE_MAX_PX, DEFAULT_LOGO_SIZE_PX);
+  }
+  return DEFAULT_LOGO_SIZE_PX;
+}
+
+export function resolveFooterFontSizePx(
+  footer?: Pick<FooterProfile, 'fontSizePx' | 'textSize'> | null
+): number {
+  if (typeof footer?.fontSizePx === 'number' && Number.isFinite(footer.fontSizePx)) {
+    return clampPx(footer.fontSizePx, FOOTER_FONT_MIN_PX, FOOTER_FONT_MAX_PX, DEFAULT_FOOTER_FONT_PX);
+  }
+  return legacyTextSizeToFooterPx(footer?.textSize);
+}
+
+export function resolveTemplateBodyFontSizePx(
+  template?: Pick<DocumentTemplate, 'bodyFontSizePx'> | null
+): number {
+  if (typeof template?.bodyFontSizePx === 'number' && Number.isFinite(template.bodyFontSizePx)) {
+    return clampPx(template.bodyFontSizePx, BODY_FONT_MIN_PX, BODY_FONT_MAX_PX, DEFAULT_BODY_FONT_PX);
+  }
+  return DEFAULT_BODY_FONT_PX;
+}
+
+/**
+ * Converts a CSS pixel size from the A4 preview (~620px content width) into PDF points (`pt`)
+ * so that `14px` body -> ~`11pt`, `14px` header -> ~`12.5pt`, `12px` footer -> ~`8.5pt`.
+ */
+export function headerPxToPdfPt(titlePx: number): { titlePt: number; subPt: number } {
+  const clamped = clampPx(titlePx, HEADER_FONT_MIN_PX, HEADER_FONT_MAX_PX, DEFAULT_HEADER_FONT_PX);
+  const titlePt = Number((clamped * 0.88).toFixed(1));
+  const subPt = Number(Math.max(6.5, clamped * 0.68).toFixed(1));
+  return { titlePt, subPt };
+}
+
+export function footerPxToPdfPt(footerPx: number): number {
+  const clamped = clampPx(footerPx, FOOTER_FONT_MIN_PX, FOOTER_FONT_MAX_PX, DEFAULT_FOOTER_FONT_PX);
+  return Number(Math.max(6, clamped * 0.7).toFixed(1));
+}
+
+export function bodyPxToPdfPt(bodyPx: number): number {
+  const clamped = clampPx(bodyPx, BODY_FONT_MIN_PX, BODY_FONT_MAX_PX, DEFAULT_BODY_FONT_PX);
+  return Number((clamped * 0.78).toFixed(1));
+}
+
+export function logoPxToPdfTargetWidthMm(logoPx: number, maxWidthMm = 92): number {
+  const clamped = clampPx(logoPx, LOGO_SIZE_MIN_PX, LOGO_SIZE_MAX_PX, DEFAULT_LOGO_SIZE_PX);
+  return Math.min(maxWidthMm, Math.max(10, Number((clamped * 0.25).toFixed(2))));
+}
+
 export const TIMBRADO_COLOR_SWATCHES = [
   { hex: '#0B1D3A', label: 'Azul Marinho' },
   { hex: '#0F172A', label: 'Preto / Grafite' },
@@ -126,6 +231,8 @@ export const DEFAULT_HEADERS: HeaderProfile[] = [
     textPosition: 'below',
     fontFamily: 'playfair',
     textSize: 'medium',
+    fontSizePx: 14,
+    logoSizePx: 120,
     textColor: '#0B1D3A',
     isDefault: true,
     officeId: OFFICE_SCOPE_ID,
@@ -144,6 +251,8 @@ export const DEFAULT_HEADERS: HeaderProfile[] = [
     textPosition: 'below',
     fontFamily: 'inter',
     textSize: 'small',
+    fontSizePx: 12,
+    logoSizePx: 100,
     textColor: '#0F172A',
     isDefault: false,
     officeId: OFFICE_SCOPE_ID,
@@ -165,6 +274,7 @@ export const DEFAULT_FOOTERS: FooterProfile[] = [
     alignment: 'center',
     fontFamily: 'inter',
     textSize: 'medium',
+    fontSizePx: 12,
     textColor: '#475569',
     isDefault: true,
     officeId: OFFICE_SCOPE_ID,
@@ -244,6 +354,8 @@ export function resolveTemplateTimbrado(params: {
       textPosition: 'below',
       fontFamily: 'playfair',
       textSize: 'medium',
+      fontSizePx: DEFAULT_HEADER_FONT_PX,
+      logoSizePx: DEFAULT_LOGO_SIZE_PX,
       textColor: '#0B1D3A',
       isDefault: true,
       officeId: OFFICE_SCOPE_ID,
@@ -279,6 +391,7 @@ export function resolveTemplateTimbrado(params: {
       alignment: 'center',
       fontFamily: 'inter',
       textSize: 'medium',
+      fontSizePx: DEFAULT_FOOTER_FONT_PX,
       textColor: '#475569',
       isDefault: true,
       officeId: OFFICE_SCOPE_ID,

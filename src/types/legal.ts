@@ -32,7 +32,9 @@ export interface HeaderProfile {
   logoPosition?: HeaderLogoPosition;
   textPosition?: HeaderTextPosition;
   fontFamily: TimbradoFontFamily;
-  textSize: TimbradoTextSize;
+  textSize?: TimbradoTextSize;
+  fontSizePx?: number;
+  logoSizePx?: number;
   textColor: string;
   isDefault: boolean;
   officeId?: string;
@@ -51,7 +53,8 @@ export interface FooterProfile {
   website?: string;
   alignment: HeaderAlignment;
   fontFamily: TimbradoFontFamily;
-  textSize: TimbradoTextSize;
+  textSize?: TimbradoTextSize;
+  fontSizePx?: number;
   textColor: string;
   isDefault: boolean;
   officeId?: string;
@@ -106,6 +109,7 @@ export interface DocumentTemplate {
   content: string;
   isDefault: boolean;
   customFields?: CustomTemplateField[];
+  bodyFontSizePx?: number;
   headerId?: string | null;
   footerId?: string | null;
   logoId?: string | null;

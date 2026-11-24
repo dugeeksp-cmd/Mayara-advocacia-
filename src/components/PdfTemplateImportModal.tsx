@@ -191,6 +191,8 @@ export function PdfTemplateImportModal({
         textPosition: 'below',
         fontFamily: 'playfair',
         textSize: 'medium',
+        fontSizePx: 14,
+        logoSizePx: 120,
         textColor: '#0B1D3A',
         isDefault: false,
       });
@@ -213,6 +215,7 @@ export function PdfTemplateImportModal({
         alignment: 'center',
         fontFamily: 'inter',
         textSize: 'medium',
+        fontSizePx: 12,
         textColor: '#475569',
         isDefault: false,
       });

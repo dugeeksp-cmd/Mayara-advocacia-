@@ -11,9 +11,19 @@ import {
   resolveHeaderLayout,
 } from './headerLayout';
 import {
+  bodyPxToPdfPt,
+  DEFAULT_FOOTER_FONT_PX,
+  DEFAULT_HEADER_FONT_PX,
+  DEFAULT_LOGO_SIZE_PX,
+  footerPxToPdfPt,
   getFontOption,
-  getSizeOption,
+  headerPxToPdfPt,
   hexToRgb,
+  logoPxToPdfTargetWidthMm,
+  resolveFooterFontSizePx,
+  resolveHeaderFontSizePx,
+  resolveHeaderLogoSizePx,
+  resolveTemplateBodyFontSizePx,
 } from './timbradoTheme';
 
 export interface GeneratedPdfArtifact {
@@ -35,30 +45,37 @@ const BOLD_PREFIXES = [
 function computeLogoBoxDimensions(
   doc: jsPDF,
   dataUrl: string,
-  maxWidthMm = 28,
-  maxHeightMm = 16
+  targetWidthMm = 30,
+  maxWidthMm = 95,
+  maxHeightMm = 48
 ): { width: number; height: number; format: 'PNG' | 'JPEG' } {
   const format = dataUrl.includes('image/png') ? 'PNG' : 'JPEG';
+  const clampedTargetW = Math.min(maxWidthMm, Math.max(8, targetWidthMm));
   try {
     const props = doc.getImageProperties(dataUrl);
     if (props?.width > 0 && props?.height > 0) {
       const ratio = props.width / props.height;
-      let width = maxHeightMm * ratio;
-      let height = maxHeightMm;
+      let width = clampedTargetW;
+      let height = width / ratio;
+      if (height > maxHeightMm) {
+        height = maxHeightMm;
+        width = height * ratio;
+      }
       if (width > maxWidthMm) {
         width = maxWidthMm;
-        height = maxWidthMm / ratio;
+        height = width / ratio;
       }
       return {
-        width: Math.max(8, Number(width.toFixed(2))),
-        height: Math.max(8, Number(height.toFixed(2))),
+        width: Math.max(6, Number(width.toFixed(2))),
+        height: Math.max(6, Number(height.toFixed(2))),
         format,
       };
     }
   } catch {
     // Fallback to square logo dimensions if image metadata unavailable
   }
-  return { width: 16, height: 16, format };
+  const side = Math.min(clampedTargetW, maxHeightMm);
+  return { width: side, height: side, format };
 }
 
 function drawResolvedHeader(
@@ -78,10 +95,19 @@ function drawResolvedHeader(
   }
 
   const contentWidth = pageWidth - marginX * 2;
-  const hasLogo = Boolean(logo?.dataUrl && logo.dataUrl.startsWith('data:image/'));
-  const logoDims = hasLogo && logo?.dataUrl ? computeLogoBoxDimensions(doc, logo.dataUrl) : null;
-
   const layout = resolveHeaderLayout(header);
+  const logoSizePx = resolveHeaderLogoSizePx(header);
+  const isBeside = layout.textPosition === 'beside';
+  const maxLogoW = isBeside ? contentWidth * 0.52 : contentWidth * 0.85;
+  const maxLogoH = isBeside ? 40 : 48;
+  const targetLogoW = logoPxToPdfTargetWidthMm(logoSizePx, maxLogoW);
+
+  const hasLogo = Boolean(logo?.dataUrl && logo.dataUrl.startsWith('data:image/'));
+  const logoDims =
+    hasLogo && logo?.dataUrl
+      ? computeLogoBoxDimensions(doc, logo.dataUrl, targetLogoW, maxLogoW, maxLogoH)
+      : null;
+
   const logoAlignX = (logoW: number) =>
     layout.logoPosition === 'left'
       ? marginX
@@ -103,16 +129,17 @@ function drawResolvedHeader(
   }
 
   const fontOpt = getFontOption(header.fontFamily);
-  const sizeOpt = getSizeOption(header.textSize);
+  const headerFontPx = resolveHeaderFontSizePx(header);
+  const { titlePt, subPt } = headerPxToPdfPt(headerFontPx);
   const [r, g, b] = hexToRgb(header.textColor);
   const titleText = header.officeTitle.toUpperCase();
   const oabLine = header.subtitle
     ? `${header.oabNumber}  |  ${header.subtitle}`
     : header.oabNumber;
 
-  const titleLineH = sizeOpt.headerTitlePdfPt * 0.44 + 0.6;
-  const subLineH = sizeOpt.headerSubPdfPt * 0.44 + 0.5;
-  const titleBaselineOffset = sizeOpt.headerTitlePdfPt * 0.35;
+  const titleLineH = titlePt * 0.44 + 0.6;
+  const subLineH = subPt * 0.44 + 0.5;
+  const titleBaselineOffset = titlePt * 0.35;
 
   // HORIZONTAL 2-COLUMN LAYOUT ("beside") WHEN LOGO IS PRESENT
   if (layout.textPosition === 'beside' && hasLogo && logoDims && logo?.dataUrl) {
@@ -122,12 +149,12 @@ function drawResolvedHeader(
         : contentWidth - logoDims.width - 6;
 
     doc.setFont(fontOpt.pdfFamily, 'bold');
-    doc.setFontSize(sizeOpt.headerTitlePdfPt);
+    doc.setFontSize(titlePt);
     const titleLines = doc.splitTextToSize(titleText, Math.max(40, tentativeColW)) as string[];
     const titleWidths = titleLines.map((line) => doc.getTextWidth(line));
 
     doc.setFont(fontOpt.pdfFamily, 'bold');
-    doc.setFontSize(sizeOpt.headerSubPdfPt);
+    doc.setFontSize(subPt);
     const subLines = doc.splitTextToSize(oabLine, Math.max(40, tentativeColW)) as string[];
     const subWidths = subLines.map((line) => doc.getTextWidth(line));
 
@@ -156,7 +183,7 @@ function drawResolvedHeader(
 
     let cursorY = geo.firstTextTopY + titleBaselineOffset;
     doc.setFont(fontOpt.pdfFamily, 'bold');
-    doc.setFontSize(sizeOpt.headerTitlePdfPt);
+    doc.setFontSize(titlePt);
     doc.setTextColor(r, g, b);
     for (const line of titleLines) {
       doc.text(line, geo.textAnchorX, cursorY, { align: geo.textAlign });
@@ -165,7 +192,7 @@ function drawResolvedHeader(
 
     cursorY += subGap;
     doc.setFont(fontOpt.pdfFamily, 'bold');
-    doc.setFontSize(sizeOpt.headerSubPdfPt);
+    doc.setFontSize(subPt);
     doc.setTextColor(154, 120, 53); // Matte Gold #9A7835
     for (const line of subLines) {
       doc.text(line, geo.textAnchorX, cursorY, { align: geo.textAlign });
@@ -188,11 +215,11 @@ function drawResolvedHeader(
         : pageWidth / 2;
 
   doc.setFont(fontOpt.pdfFamily, 'bold');
-  doc.setFontSize(sizeOpt.headerTitlePdfPt);
+  doc.setFontSize(titlePt);
   const titleLines = doc.splitTextToSize(titleText, contentWidth) as string[];
 
   doc.setFont(fontOpt.pdfFamily, 'bold');
-  doc.setFontSize(sizeOpt.headerSubPdfPt);
+  doc.setFontSize(subPt);
   const subLines = doc.splitTextToSize(oabLine, contentWidth) as string[];
 
   let cursorY = 11;
@@ -200,7 +227,7 @@ function drawResolvedHeader(
   if (layout.textPosition === 'above') {
     cursorY += titleBaselineOffset + 1;
     doc.setFont(fontOpt.pdfFamily, 'bold');
-    doc.setFontSize(sizeOpt.headerTitlePdfPt);
+    doc.setFontSize(titlePt);
     doc.setTextColor(r, g, b);
     for (const line of titleLines) {
       doc.text(line, textX, cursorY, { align: textAlign });
@@ -209,7 +236,7 @@ function drawResolvedHeader(
 
     cursorY += 1.2;
     doc.setFont(fontOpt.pdfFamily, 'bold');
-    doc.setFontSize(sizeOpt.headerSubPdfPt);
+    doc.setFontSize(subPt);
     doc.setTextColor(154, 120, 53);
     for (const line of subLines) {
       doc.text(line, textX, cursorY, { align: textAlign });
@@ -255,7 +282,7 @@ function drawResolvedHeader(
     }
 
     doc.setFont(fontOpt.pdfFamily, 'bold');
-    doc.setFontSize(sizeOpt.headerTitlePdfPt);
+    doc.setFontSize(titlePt);
     doc.setTextColor(r, g, b);
     for (const line of titleLines) {
       doc.text(line, textX, cursorY, { align: textAlign });
@@ -264,7 +291,7 @@ function drawResolvedHeader(
 
     cursorY += 1.2;
     doc.setFont(fontOpt.pdfFamily, 'bold');
-    doc.setFontSize(sizeOpt.headerSubPdfPt);
+    doc.setFontSize(subPt);
     doc.setTextColor(154, 120, 53);
     for (const line of subLines) {
       doc.text(line, textX, cursorY, { align: textAlign });
@@ -280,6 +307,12 @@ function drawResolvedHeader(
   return cursorY + 8;
 }
 
+function resolveFooterReservedHeightMm(footer: FooterProfile | null): number {
+  if (!footer) return 18;
+  const footerPt = footerPxToPdfPt(resolveFooterFontSizePx(footer));
+  return Math.max(23, Math.round(footerPt * 1.9 + 9));
+}
+
 function drawResolvedFooter(
   doc: jsPDF,
   footer: FooterProfile | null,
@@ -290,7 +323,12 @@ function drawResolvedFooter(
 ): void {
   if (!footer) return;
 
-  const footerTop = pageHeight - 23;
+  const fontOpt = getFontOption(footer.fontFamily);
+  const footerPt = footerPxToPdfPt(resolveFooterFontSizePx(footer));
+  const reservedH = resolveFooterReservedHeightMm(footer);
+  const footerTop = pageHeight - reservedH;
+  const lineStep = Math.max(4.5, Number((footerPt * 0.56).toFixed(1)));
+
   doc.setDrawColor(203, 213, 225);
   doc.setLineWidth(0.3);
   doc.line(marginX, footerTop, pageWidth - marginX, footerTop);
@@ -314,12 +352,10 @@ function drawResolvedFooter(
   const align = footer.alignment || 'center';
   const textX =
     align === 'left' ? marginX : align === 'right' ? pageWidth - marginX : pageWidth / 2;
-  const fontOpt = getFontOption(footer.fontFamily);
-  const sizeOpt = getSizeOption(footer.textSize);
   const [r, g, b] = hexToRgb(footer.textColor);
 
   doc.setFont(fontOpt.pdfFamily, 'normal');
-  doc.setFontSize(sizeOpt.footerPdfPt);
+  doc.setFontSize(footerPt);
   doc.setTextColor(r, g, b);
   doc.text(footer.addressFooter, textX, footerTop + 5.5, { align });
 
@@ -329,7 +365,7 @@ function drawResolvedFooter(
     footer.instagram ? footer.instagram : '',
     footer.website ? footer.website : '',
   ].filter(Boolean);
-  doc.text(contactParts.join('  |  '), textX, footerTop + 10.5, { align });
+  doc.text(contactParts.join('  |  '), textX, footerTop + 5.5 + lineStep, { align });
 }
 
 function legacyHeaderFromLetterhead(lh?: LetterheadSettings): HeaderProfile | null {
@@ -343,6 +379,8 @@ function legacyHeaderFromLetterhead(lh?: LetterheadSettings): HeaderProfile | nu
     alignment: lh.headerAlignment || 'center',
     fontFamily: 'playfair',
     textSize: 'medium',
+    fontSizePx: DEFAULT_HEADER_FONT_PX,
+    logoSizePx: DEFAULT_LOGO_SIZE_PX,
     textColor: '#0B1D3A',
     isDefault: true,
     createdAt: lh.updatedAt,
@@ -364,6 +402,7 @@ function legacyFooterFromLetterhead(lh?: LetterheadSettings): FooterProfile | nu
     alignment: 'center',
     fontFamily: 'inter',
     textSize: 'medium',
+    fontSizePx: DEFAULT_FOOTER_FONT_PX,
     textColor: '#475569',
     isDefault: true,
     createdAt: lh.updatedAt,
@@ -388,6 +427,7 @@ function legacyLogoFromLetterhead(lh?: LetterheadSettings): LogoAsset | null {
 export async function generateLegalDocumentPdf(params: {
   documentTitle: string;
   renderedText: string;
+  bodyFontSizePx?: number;
   letterhead?: LetterheadSettings;
   header?: HeaderProfile | null;
   footer?: FooterProfile | null;
@@ -402,6 +442,11 @@ export async function generateLegalDocumentPdf(params: {
   const resolvedLogo =
     params.logo !== undefined ? params.logo : legacyLogoFromLetterhead(letterhead);
 
+  const bodyPx = resolveTemplateBodyFontSizePx({ bodyFontSizePx: params.bodyFontSizePx });
+  const bodyPt = bodyPxToPdfPt(bodyPx);
+  const bodyLineH = Number((bodyPt * 0.51).toFixed(2));
+  const docTitlePt = Math.max(12, Number((bodyPt + 3).toFixed(1)));
+
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
@@ -413,13 +458,13 @@ export async function generateLegalDocumentPdf(params: {
   const pageHeight = doc.internal.pageSize.getHeight(); // 297mm
   const marginX = 22;
   const contentWidth = pageWidth - marginX * 2;
-  const maxBodyY = pageHeight - 36;
+  const maxBodyY = pageHeight - resolveFooterReservedHeightMm(resolvedFooter) - 10;
 
   let cursorY = drawResolvedHeader(doc, resolvedHeader, resolvedLogo, pageWidth, marginX);
 
   // Document Title
   doc.setFont('times', 'bold');
-  doc.setFontSize(14);
+  doc.setFontSize(docTitlePt);
   doc.setTextColor(11, 29, 58);
   doc.text(documentTitle.toUpperCase(), pageWidth / 2, cursorY + 4, { align: 'center' });
   cursorY += 15;
@@ -432,18 +477,18 @@ export async function generateLegalDocumentPdf(params: {
 
     const matchedPrefix = BOLD_PREFIXES.find((prefix) => paragraph.startsWith(prefix));
     doc.setFont('times', 'normal');
-    doc.setFontSize(11);
+    doc.setFontSize(bodyPt);
     doc.setTextColor(15, 23, 42);
 
     const lines = doc.splitTextToSize(paragraph, contentWidth) as string[];
-    const blockHeight = lines.length * 5.6 + 4;
+    const blockHeight = lines.length * bodyLineH + 4;
 
     if (cursorY + blockHeight > maxBodyY) {
       drawResolvedFooter(doc, resolvedFooter, letterhead, pageWidth, pageHeight, marginX);
       doc.addPage();
       cursorY = drawResolvedHeader(doc, resolvedHeader, resolvedLogo, pageWidth, marginX);
       doc.setFont('times', 'normal');
-      doc.setFontSize(11);
+      doc.setFontSize(bodyPt);
       doc.setTextColor(15, 23, 42);
     }
 
@@ -457,10 +502,10 @@ export async function generateLegalDocumentPdf(params: {
         const prefixWidth = doc.getTextWidth(prefixText);
         doc.setFont('times', 'normal');
         doc.text(restFirstLine, marginX + prefixWidth, cursorY);
-        cursorY += 5.6;
+        cursorY += bodyLineH;
         for (let i = 1; i < lines.length; i++) {
           doc.text(lines[i], marginX, cursorY);
-          cursorY += 5.6;
+          cursorY += bodyLineH;
         }
         cursorY += 4.5;
         continue;
@@ -469,7 +514,7 @@ export async function generateLegalDocumentPdf(params: {
 
     for (const line of lines) {
       doc.text(line, marginX, cursorY);
-      cursorY += 5.6;
+      cursorY += bodyLineH;
     }
     cursorY += 4.5;
   }

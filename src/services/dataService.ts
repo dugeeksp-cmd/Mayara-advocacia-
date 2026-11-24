@@ -38,10 +38,16 @@ import {
   DEFAULT_TEMPLATES,
 } from '../utils/templateEngine';
 import {
+  DEFAULT_BODY_FONT_PX,
   DEFAULT_FOOTERS,
   DEFAULT_HEADERS,
   DEFAULT_LOGOS,
   OFFICE_SCOPE_ID,
+  pxToLegacyTextSize,
+  resolveFooterFontSizePx,
+  resolveHeaderFontSizePx,
+  resolveHeaderLogoSizePx,
+  resolveTemplateBodyFontSizePx,
 } from '../utils/timbradoTheme';
 import { findClientByCpf as findClientByCpfInList } from '../utils/legalFieldOptions';
 import {
@@ -245,6 +251,11 @@ export function getPersistenceMode(): PersistenceMode {
 // ---------------------------------------------------------------------------
 function mapHeaderDoc(data: Record<string, unknown>): HeaderProfile {
   const alignment = (data.alignment as HeaderProfile['alignment']) || 'center';
+  const legacyTextSize = data.textSize as HeaderProfile['textSize'] | undefined;
+  const rawFontPx = typeof data.fontSizePx === 'number' ? data.fontSizePx : undefined;
+  const rawLogoPx = typeof data.logoSizePx === 'number' ? data.logoSizePx : undefined;
+  const fontSizePx = resolveHeaderFontSizePx({ fontSizePx: rawFontPx, textSize: legacyTextSize });
+  const logoSizePx = resolveHeaderLogoSizePx({ logoSizePx: rawLogoPx });
   return {
     id: String(data.id),
     name: String(data.name || 'Cabeçalho'),
@@ -255,7 +266,9 @@ function mapHeaderDoc(data: Record<string, unknown>): HeaderProfile {
     logoPosition: (data.logoPosition as HeaderProfile['logoPosition']) || alignment || 'center',
     textPosition: (data.textPosition as HeaderProfile['textPosition']) || 'below',
     fontFamily: (data.fontFamily as HeaderProfile['fontFamily']) || 'playfair',
-    textSize: (data.textSize as HeaderProfile['textSize']) || 'medium',
+    textSize: legacyTextSize || pxToLegacyTextSize(fontSizePx),
+    fontSizePx,
+    logoSizePx,
     textColor: typeof data.textColor === 'string' ? data.textColor : '#0B1D3A',
     isDefault: Boolean(data.isDefault),
     officeId: typeof data.officeId === 'string' ? data.officeId : OFFICE_SCOPE_ID,
@@ -266,6 +279,9 @@ function mapHeaderDoc(data: Record<string, unknown>): HeaderProfile {
 }
 
 function mapFooterDoc(data: Record<string, unknown>): FooterProfile {
+  const legacyTextSize = data.textSize as FooterProfile['textSize'] | undefined;
+  const rawFontPx = typeof data.fontSizePx === 'number' ? data.fontSizePx : undefined;
+  const fontSizePx = resolveFooterFontSizePx({ fontSizePx: rawFontPx, textSize: legacyTextSize });
   return {
     id: String(data.id),
     name: String(data.name || 'Rodapé'),
@@ -276,7 +292,8 @@ function mapFooterDoc(data: Record<string, unknown>): FooterProfile {
     website: typeof data.website === 'string' ? data.website : '',
     alignment: (data.alignment as FooterProfile['alignment']) || 'center',
     fontFamily: (data.fontFamily as FooterProfile['fontFamily']) || 'inter',
-    textSize: (data.textSize as FooterProfile['textSize']) || 'medium',
+    textSize: legacyTextSize || pxToLegacyTextSize(fontSizePx),
+    fontSizePx,
     textColor: typeof data.textColor === 'string' ? data.textColor : '#475569',
     isDefault: Boolean(data.isDefault),
     officeId: typeof data.officeId === 'string' ? data.officeId : OFFICE_SCOPE_ID,
@@ -301,11 +318,13 @@ function mapLogoDoc(data: Record<string, unknown>): LogoAsset {
 }
 
 function mapTemplateDoc(data: Record<string, unknown>): DocumentTemplate {
+  const rawBodyPx = typeof data.bodyFontSizePx === 'number' ? data.bodyFontSizePx : undefined;
   return {
     id: String(data.id),
     title: String(data.title),
     category: String(data.category),
     content: String(data.content),
+    bodyFontSizePx: resolveTemplateBodyFontSizePx({ bodyFontSizePx: rawBodyPx }),
     isDefault: Boolean(data.isDefault),
     customFields: Array.isArray(data.customFields) ? data.customFields : [],
     headerId:
@@ -408,6 +427,8 @@ export const dataService = {
         const headersSnap = await getDocs(scopedQuery('headers'));
         if (headersSnap.empty) {
           for (const h of DEFAULT_HEADERS) {
+            const fontSizePx = resolveHeaderFontSizePx(h);
+            const logoSizePx = resolveHeaderLogoSizePx(h);
             await setDoc(doc(db, 'headers', h.id), {
               id: h.id,
               name: h.name,
@@ -418,7 +439,9 @@ export const dataService = {
               logoPosition: h.logoPosition || h.alignment || 'center',
               textPosition: h.textPosition || 'below',
               fontFamily: h.fontFamily,
-              textSize: h.textSize,
+              textSize: h.textSize || pxToLegacyTextSize(fontSizePx),
+              fontSizePx,
+              logoSizePx,
               textColor: h.textColor,
               isDefault: h.isDefault,
               officeId: OFFICE_SCOPE_ID,
@@ -434,6 +457,7 @@ export const dataService = {
         const footersSnap = await getDocs(scopedQuery('footers'));
         if (footersSnap.empty) {
           for (const f of DEFAULT_FOOTERS) {
+            const fontSizePx = resolveFooterFontSizePx(f);
             await setDoc(doc(db, 'footers', f.id), {
               id: f.id,
               name: f.name,
@@ -444,7 +468,8 @@ export const dataService = {
               website: f.website || '',
               alignment: f.alignment,
               fontFamily: f.fontFamily,
-              textSize: f.textSize,
+              textSize: f.textSize || pxToLegacyTextSize(fontSizePx),
+              fontSizePx,
               textColor: f.textColor,
               isDefault: f.isDefault,
               officeId: OFFICE_SCOPE_ID,
@@ -501,6 +526,7 @@ export const dataService = {
               title: tpl.title,
               category: tpl.category,
               content: tpl.content,
+              bodyFontSizePx: resolveTemplateBodyFontSizePx(tpl),
               isDefault: tpl.isDefault,
               customFields: tpl.customFields ?? [],
               headerId: 'header_principal',
@@ -617,11 +643,17 @@ export const dataService = {
     const nowIso = new Date().toISOString();
     const cached = readCache<HeaderProfile[]>(CACHE_KEYS.headers, DEFAULT_HEADERS);
     const existing = cached.find((h) => h.id === input.id);
+    const fontSizePx = resolveHeaderFontSizePx(input);
+    const logoSizePx = resolveHeaderLogoSizePx(input);
+    const derivedTextSize = pxToLegacyTextSize(fontSizePx);
     const saved: HeaderProfile = {
       ...input,
       subtitle: input.subtitle ?? '',
       logoPosition: input.logoPosition || input.alignment || 'center',
       textPosition: input.textPosition || 'below',
+      fontSizePx,
+      logoSizePx,
+      textSize: derivedTextSize,
       officeId: OFFICE_SCOPE_ID,
       createdAt: existing?.createdAt || input.createdAt || nowIso,
       updatedAt: nowIso,
@@ -651,7 +683,9 @@ export const dataService = {
         logoPosition: saved.logoPosition || saved.alignment || 'center',
         textPosition: saved.textPosition || 'below',
         fontFamily: saved.fontFamily,
-        textSize: saved.textSize,
+        textSize: derivedTextSize,
+        fontSizePx,
+        logoSizePx,
         textColor: saved.textColor,
         isDefault: saved.isDefault,
         officeId: OFFICE_SCOPE_ID,
@@ -751,10 +785,14 @@ export const dataService = {
     const nowIso = new Date().toISOString();
     const cached = readCache<FooterProfile[]>(CACHE_KEYS.footers, DEFAULT_FOOTERS);
     const existing = cached.find((f) => f.id === input.id);
+    const fontSizePx = resolveFooterFontSizePx(input);
+    const derivedTextSize = pxToLegacyTextSize(fontSizePx);
     const saved: FooterProfile = {
       ...input,
       instagram: input.instagram ?? '',
       website: input.website ?? '',
+      fontSizePx,
+      textSize: derivedTextSize,
       officeId: OFFICE_SCOPE_ID,
       createdAt: existing?.createdAt || input.createdAt || nowIso,
       updatedAt: nowIso,
@@ -783,7 +821,8 @@ export const dataService = {
         website: (saved.website || '').trim(),
         alignment: saved.alignment,
         fontFamily: saved.fontFamily,
-        textSize: saved.textSize,
+        textSize: derivedTextSize,
+        fontSizePx,
         textColor: saved.textColor,
         isDefault: saved.isDefault,
         officeId: OFFICE_SCOPE_ID,
@@ -1153,8 +1192,11 @@ export const dataService = {
     const cached = readCache<DocumentTemplate[]>(CACHE_KEYS.templates, DEFAULT_TEMPLATES);
     const existingLocal = cached.find((t) => t.id === template.id);
 
+    const bodyFontSizePx = resolveTemplateBodyFontSizePx(template);
+
     const saved: DocumentTemplate = {
       ...template,
+      bodyFontSizePx,
       customFields: template.customFields ?? [],
       headerId: template.headerId === undefined ? undefined : template.headerId,
       footerId: template.footerId === undefined ? undefined : template.footerId,
@@ -1181,6 +1223,7 @@ export const dataService = {
         title: template.title.trim(),
         category: template.category.trim(),
         content: template.content,
+        bodyFontSizePx: bodyFontSizePx ?? DEFAULT_BODY_FONT_PX,
         isDefault: template.isDefault,
         customFields: template.customFields ?? [],
         headerId: template.headerId === undefined ? null : template.headerId,
@@ -1292,6 +1335,7 @@ export const dataService = {
                 title: localTpl.title,
                 category: localTpl.category,
                 content: localTpl.content,
+                bodyFontSizePx: resolveTemplateBodyFontSizePx(localTpl),
                 isDefault: localTpl.isDefault,
                 customFields: localTpl.customFields ?? [],
                 headerId: localTpl.headerId === undefined ? null : localTpl.headerId,

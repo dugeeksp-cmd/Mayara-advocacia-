@@ -25,6 +25,7 @@ import {
 import { PdfTemplateImportModal } from './PdfTemplateImportModal';
 import { BatchApplyTemplatesModal } from './BatchApplyTemplatesModal';
 import { HeaderPreviewBlock } from './HeaderPreviewBlock';
+import { PixelSizeSlider } from './PixelSizeSlider';
 import type {
   CustomFieldType,
   CustomTemplateField,
@@ -37,7 +38,6 @@ import type {
   LetterheadSettings,
   LogoAsset,
   TimbradoFontFamily,
-  TimbradoTextSize,
 } from '../types/legal';
 import type {
   SaveFooterInput,
@@ -59,13 +59,28 @@ import {
   interpolateTemplate,
 } from '../utils/templateEngine';
 import {
+  BODY_FONT_MAX_PX,
+  BODY_FONT_MIN_PX,
+  DEFAULT_BODY_FONT_PX,
+  DEFAULT_FOOTER_FONT_PX,
+  DEFAULT_HEADER_FONT_PX,
+  DEFAULT_LOGO_SIZE_PX,
+  FOOTER_FONT_MAX_PX,
+  FOOTER_FONT_MIN_PX,
   getFontOption,
-  getSizeOption,
+  HEADER_FONT_MAX_PX,
+  HEADER_FONT_MIN_PX,
+  LOGO_SIZE_MAX_PX,
+  LOGO_SIZE_MIN_PX,
   normalizeHexColor,
+  pxToLegacyTextSize,
+  resolveFooterFontSizePx,
+  resolveHeaderFontSizePx,
+  resolveHeaderLogoSizePx,
+  resolveTemplateBodyFontSizePx,
   resolveTemplateTimbrado,
   TIMBRADO_COLOR_SWATCHES,
   TIMBRADO_FONT_OPTIONS,
-  TIMBRADO_SIZE_OPTIONS,
 } from '../utils/timbradoTheme';
 import { generateLegalDocumentPdf, triggerBlobDownload } from '../utils/pdfGenerator';
 
@@ -189,7 +204,8 @@ export function AdminCmsEditor({
     logoPosition: (initialHeader?.logoPosition || initialHeader?.alignment || 'center') as HeaderLogoPosition,
     textPosition: (initialHeader?.textPosition || 'below') as HeaderTextPosition,
     fontFamily: (initialHeader?.fontFamily || 'playfair') as TimbradoFontFamily,
-    textSize: (initialHeader?.textSize || 'medium') as TimbradoTextSize,
+    fontSizePx: resolveHeaderFontSizePx(initialHeader),
+    logoSizePx: resolveHeaderLogoSizePx(initialHeader),
     textColor: initialHeader?.textColor || '#0B1D3A',
     isDefault: initialHeader?.isDefault ?? true,
   });
@@ -210,7 +226,7 @@ export function AdminCmsEditor({
     website: initialFooter?.website || letterhead.website || '',
     alignment: (initialFooter?.alignment || 'center') as HeaderAlignment,
     fontFamily: (initialFooter?.fontFamily || 'inter') as TimbradoFontFamily,
-    textSize: (initialFooter?.textSize || 'medium') as TimbradoTextSize,
+    fontSizePx: resolveFooterFontSizePx(initialFooter),
     textColor: initialFooter?.textColor || '#475569',
     isDefault: initialFooter?.isDefault ?? true,
   });
@@ -233,6 +249,7 @@ export function AdminCmsEditor({
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('');
   const [content, setContent] = useState('');
+  const [bodyFontSizePx, setBodyFontSizePx] = useState<number>(DEFAULT_BODY_FONT_PX);
   const [isDefault, setIsDefault] = useState(false);
   const [customFields, setCustomFields] = useState<CustomTemplateField[]>([]);
   const [tplHeaderSelect, setTplHeaderSelect] = useState<string>(DEFAULT_SELECT_VAL);
@@ -258,6 +275,7 @@ export function AdminCmsEditor({
     blob: Blob;
     documentTitle: string;
     renderedText: string;
+    bodyFontSizePx: number;
     header: HeaderProfile | null;
     footer: FooterProfile | null;
     logo: LogoAsset | null;
@@ -293,7 +311,8 @@ export function AdminCmsEditor({
       logoPosition: h.logoPosition || h.alignment || 'center',
       textPosition: h.textPosition || 'below',
       fontFamily: h.fontFamily,
-      textSize: h.textSize,
+      fontSizePx: resolveHeaderFontSizePx(h),
+      logoSizePx: resolveHeaderLogoSizePx(h),
       textColor: h.textColor,
       isDefault: h.isDefault,
     });
@@ -312,7 +331,8 @@ export function AdminCmsEditor({
       logoPosition: 'center',
       textPosition: 'below',
       fontFamily: 'playfair',
-      textSize: 'medium',
+      fontSizePx: DEFAULT_HEADER_FONT_PX,
+      logoSizePx: DEFAULT_LOGO_SIZE_PX,
       textColor: '#0B1D3A',
       isDefault: headers.length === 0,
     });
@@ -338,7 +358,9 @@ export function AdminCmsEditor({
         logoPosition: headerForm.logoPosition,
         textPosition: headerForm.textPosition,
         fontFamily: headerForm.fontFamily,
-        textSize: headerForm.textSize,
+        textSize: pxToLegacyTextSize(headerForm.fontSizePx),
+        fontSizePx: headerForm.fontSizePx,
+        logoSizePx: headerForm.logoSizePx,
         textColor: normalizeHexColor(headerForm.textColor, '#0B1D3A'),
         isDefault: headerForm.isDefault,
       });
@@ -382,7 +404,7 @@ export function AdminCmsEditor({
       website: f.website || '',
       alignment: f.alignment,
       fontFamily: f.fontFamily,
-      textSize: f.textSize,
+      fontSizePx: resolveFooterFontSizePx(f),
       textColor: f.textColor,
       isDefault: f.isDefault,
     });
@@ -401,7 +423,7 @@ export function AdminCmsEditor({
       website: letterhead.website || '',
       alignment: 'center',
       fontFamily: 'inter',
-      textSize: 'medium',
+      fontSizePx: DEFAULT_FOOTER_FONT_PX,
       textColor: '#475569',
       isDefault: footers.length === 0,
     });
@@ -427,7 +449,8 @@ export function AdminCmsEditor({
         website: footerForm.website.trim(),
         alignment: footerForm.alignment,
         fontFamily: footerForm.fontFamily,
-        textSize: footerForm.textSize,
+        textSize: pxToLegacyTextSize(footerForm.fontSizePx),
+        fontSizePx: footerForm.fontSizePx,
         textColor: normalizeHexColor(footerForm.textColor, '#475569'),
         isDefault: footerForm.isDefault,
       });
@@ -509,6 +532,7 @@ export function AdminCmsEditor({
     setTitle(tpl.title);
     setCategory(tpl.category);
     setContent(tpl.content);
+    setBodyFontSizePx(resolveTemplateBodyFontSizePx(tpl));
     setIsDefault(tpl.isDefault);
     setCustomFields(tpl.customFields ?? []);
     setTplHeaderSelect(toSelectValue(tpl.headerId));
@@ -526,6 +550,7 @@ export function AdminCmsEditor({
     setContent(
       `Eu, {{NOME_COMPLETO}}, {{NACIONALIDADE}}, {{ESTADO_CIVIL}}, {{PROFISSAO}}, inscrito(a) no CPF n.º {{CPF}}, residente e domiciliado(a) {{ENDERECO_COMPLETO}}, declaro para os devidos fins.\n\nSaquarema, {{DATA_EXTENSO}}.`
     );
+    setBodyFontSizePx(DEFAULT_BODY_FONT_PX);
     setIsDefault(false);
     setCustomFields([]);
     setTplHeaderSelect(DEFAULT_SELECT_VAL);
@@ -548,6 +573,7 @@ export function AdminCmsEditor({
     setTitle(data.title);
     setCategory('Documento Importado');
     setContent(data.content);
+    setBodyFontSizePx(DEFAULT_BODY_FONT_PX);
     setIsDefault(false);
     setCustomFields([]);
     setTplHeaderSelect(toSelectValue(data.headerId));
@@ -563,6 +589,7 @@ export function AdminCmsEditor({
     setTitle(`${tpl.title} (Cópia)`);
     setCategory(tpl.category);
     setContent(tpl.content);
+    setBodyFontSizePx(resolveTemplateBodyFontSizePx(tpl));
     setIsDefault(false);
     setCustomFields(tpl.customFields ?? []);
     setTplHeaderSelect(toSelectValue(tpl.headerId));
@@ -669,6 +696,7 @@ export function AdminCmsEditor({
         title: title.trim(),
         category: category.trim() || 'Geral',
         content,
+        bodyFontSizePx,
         isDefault,
         customFields,
         headerId: fromSelectValue(tplHeaderSelect),
@@ -700,6 +728,7 @@ export function AdminCmsEditor({
         title: title.trim() || 'Modelo de Documento (Teste)',
         category: category.trim() || 'Geral',
         content,
+        bodyFontSizePx,
         isDefault,
         customFields,
         headerId: fromSelectValue(tplHeaderSelect),
@@ -719,6 +748,7 @@ export function AdminCmsEditor({
       const artifact = await generateLegalDocumentPdf({
         documentTitle: draftTemplate.title,
         renderedText,
+        bodyFontSizePx,
         letterhead,
         header,
         footer,
@@ -731,6 +761,7 @@ export function AdminCmsEditor({
         blob: artifact.blob,
         documentTitle: draftTemplate.title,
         renderedText,
+        bodyFontSizePx,
         header,
         footer,
         logo,
@@ -742,11 +773,12 @@ export function AdminCmsEditor({
 
   // Live Preview Computed Styles
   const headerFontOpt = getFontOption(headerForm.fontFamily);
-  const headerSizeOpt = getSizeOption(headerForm.textSize);
+  const headerFontPx = resolveHeaderFontSizePx({ fontSizePx: headerForm.fontSizePx });
+  const headerLogoPx = resolveHeaderLogoSizePx({ logoSizePx: headerForm.logoSizePx });
   const headerColorHex = normalizeHexColor(headerForm.textColor, '#0B1D3A');
 
   const footerFontOpt = getFontOption(footerForm.fontFamily);
-  const footerSizeOpt = getSizeOption(footerForm.textSize);
+  const footerFontPx = resolveFooterFontSizePx({ fontSizePx: footerForm.fontSizePx });
   const footerColorHex = normalizeHexColor(footerForm.textColor, '#475569');
 
   function describeBinding(tpl: DocumentTemplate): string {
@@ -939,8 +971,9 @@ export function AdminCmsEditor({
                       )}
                     </div>
                     <p className="text-xs text-slate-600 truncate mt-0.5">{h.officeTitle}</p>
-                    <p className="text-[11px] text-slate-500 mt-0.5">
-                      {getFontOption(h.fontFamily).label} · {getSizeOption(h.textSize).label}
+                    <p className="text-[11px] text-slate-500 mt-0.5 tabular-nums">
+                      {getFontOption(h.fontFamily).label} · Texto {resolveHeaderFontSizePx(h)}px · Logo{' '}
+                      {resolveHeaderLogoSizePx(h)}px
                     </p>
                   </div>
 
@@ -1055,52 +1088,56 @@ export function AdminCmsEditor({
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label htmlFor="hdr-font" className="block text-sm font-semibold text-[#0B1D3A] mb-1.5">
-                    Fonte
-                  </label>
-                  <select
-                    id="hdr-font"
-                    value={headerForm.fontFamily}
-                    onChange={(e) =>
-                      setHeaderForm((p) => ({
-                        ...p,
-                        fontFamily: e.target.value as TimbradoFontFamily,
-                      }))
-                    }
-                    className="w-full min-h-[48px] px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm bg-white"
-                  >
-                    {TIMBRADO_FONT_OPTIONS.map((opt) => (
-                      <option key={opt.id} value={opt.id}>
-                        {opt.label} ({opt.category})
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              <div>
+                <label htmlFor="hdr-font" className="block text-sm font-semibold text-[#0B1D3A] mb-1.5">
+                  Fonte
+                </label>
+                <select
+                  id="hdr-font"
+                  value={headerForm.fontFamily}
+                  onChange={(e) =>
+                    setHeaderForm((p) => ({
+                      ...p,
+                      fontFamily: e.target.value as TimbradoFontFamily,
+                    }))
+                  }
+                  className="w-full min-h-[48px] px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm bg-white"
+                >
+                  {TIMBRADO_FONT_OPTIONS.map((opt) => (
+                    <option key={opt.id} value={opt.id}>
+                      {opt.label} ({opt.category})
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-                <div>
-                  <label htmlFor="hdr-size" className="block text-sm font-semibold text-[#0B1D3A] mb-1.5">
-                    Tamanho do Texto
-                  </label>
-                  <select
-                    id="hdr-size"
-                    value={headerForm.textSize}
-                    onChange={(e) =>
-                      setHeaderForm((p) => ({
-                        ...p,
-                        textSize: e.target.value as TimbradoTextSize,
-                      }))
-                    }
-                    className="w-full min-h-[48px] px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm bg-white"
-                  >
-                    {TIMBRADO_SIZE_OPTIONS.map((opt) => (
-                      <option key={opt.id} value={opt.id}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              <div className="grid grid-cols-1 gap-3">
+                <PixelSizeSlider
+                  id="hdr-font-px"
+                  label="Tamanho do Texto (px)"
+                  value={headerFontPx}
+                  min={HEADER_FONT_MIN_PX}
+                  max={HEADER_FONT_MAX_PX}
+                  defaultValue={DEFAULT_HEADER_FONT_PX}
+                  buttonStep={1}
+                  variant="font"
+                  onChange={(nextPx) => setHeaderForm((p) => ({ ...p, fontSizePx: nextPx }))}
+                  helperText="Ajuste contínuo em pixels aplicado em tempo real no cabeçalho A4 e no PDF."
+                />
+
+                <PixelSizeSlider
+                  id="hdr-logo-px"
+                  label="Tamanho da Imagem / Logotipo (px)"
+                  value={headerLogoPx}
+                  min={LOGO_SIZE_MIN_PX}
+                  max={LOGO_SIZE_MAX_PX}
+                  defaultValue={DEFAULT_LOGO_SIZE_PX}
+                  buttonStep={3}
+                  variant="zoom"
+                  showReset
+                  onChange={(nextPx) => setHeaderForm((p) => ({ ...p, logoSizePx: nextPx }))}
+                  helperText="Mantém a proporção original do logotipo sem distorção (botões ajustam 3px)."
+                />
               </div>
 
               <div>
@@ -1309,9 +1346,9 @@ export function AdminCmsEditor({
                 </div>
               </div>
 
-              <p className="text-xs text-slate-500 mt-4">
-                Fonte aplicada no PDF: <strong>{headerFontOpt.label}</strong> · Tamanho{' '}
-                <strong>{headerSizeOpt.label}</strong> · Cor{' '}
+              <p className="text-xs text-slate-500 mt-4 tabular-nums">
+                Fonte: <strong>{headerFontOpt.label}</strong> · Texto{' '}
+                <strong>{headerFontPx}px</strong> · Logo <strong>{headerLogoPx}px</strong> · Cor{' '}
                 <span className="font-mono">{headerColorHex}</span>.
               </p>
             </div>
@@ -1374,8 +1411,8 @@ export function AdminCmsEditor({
                       )}
                     </div>
                     <p className="text-xs text-slate-600 truncate mt-0.5">{f.addressFooter}</p>
-                    <p className="text-[11px] text-slate-500 mt-0.5">
-                      {getFontOption(f.fontFamily).label} · {getSizeOption(f.textSize).label}
+                    <p className="text-[11px] text-slate-500 mt-0.5 tabular-nums">
+                      {getFontOption(f.fontFamily).label} · Texto {resolveFooterFontSizePx(f)}px
                     </p>
                   </div>
 
@@ -1519,53 +1556,41 @@ export function AdminCmsEditor({
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label htmlFor="ftr-font" className="block text-sm font-semibold text-[#0B1D3A] mb-1.5">
-                    Fonte
-                  </label>
-                  <select
-                    id="ftr-font"
-                    value={footerForm.fontFamily}
-                    onChange={(e) =>
-                      setFooterForm((p) => ({
-                        ...p,
-                        fontFamily: e.target.value as TimbradoFontFamily,
-                      }))
-                    }
-                    className="w-full min-h-[48px] px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm bg-white"
-                  >
-                    {TIMBRADO_FONT_OPTIONS.map((opt) => (
-                      <option key={opt.id} value={opt.id}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label htmlFor="ftr-size" className="block text-sm font-semibold text-[#0B1D3A] mb-1.5">
-                    Tamanho do Texto
-                  </label>
-                  <select
-                    id="ftr-size"
-                    value={footerForm.textSize}
-                    onChange={(e) =>
-                      setFooterForm((p) => ({
-                        ...p,
-                        textSize: e.target.value as TimbradoTextSize,
-                      }))
-                    }
-                    className="w-full min-h-[48px] px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm bg-white"
-                  >
-                    {TIMBRADO_SIZE_OPTIONS.map((opt) => (
-                      <option key={opt.id} value={opt.id}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              <div>
+                <label htmlFor="ftr-font" className="block text-sm font-semibold text-[#0B1D3A] mb-1.5">
+                  Fonte
+                </label>
+                <select
+                  id="ftr-font"
+                  value={footerForm.fontFamily}
+                  onChange={(e) =>
+                    setFooterForm((p) => ({
+                      ...p,
+                      fontFamily: e.target.value as TimbradoFontFamily,
+                    }))
+                  }
+                  className="w-full min-h-[48px] px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm bg-white"
+                >
+                  {TIMBRADO_FONT_OPTIONS.map((opt) => (
+                    <option key={opt.id} value={opt.id}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
               </div>
+
+              <PixelSizeSlider
+                id="ftr-font-px"
+                label="Tamanho do Texto do Rodapé (px)"
+                value={footerFontPx}
+                min={FOOTER_FONT_MIN_PX}
+                max={FOOTER_FONT_MAX_PX}
+                defaultValue={DEFAULT_FOOTER_FONT_PX}
+                buttonStep={1}
+                variant="font"
+                onChange={(nextPx) => setFooterForm((p) => ({ ...p, fontSizePx: nextPx }))}
+                helperText="Define o tamanho exato do rodapé na pré-visualização A4 e nos PDFs."
+              />
 
               <div>
                 <span className="block text-sm font-semibold text-[#0B1D3A] mb-2">
@@ -1690,7 +1715,7 @@ export function AdminCmsEditor({
                 style={{
                   fontFamily: footerFontOpt.cssFamily,
                   color: footerColorHex,
-                  fontSize: `${footerSizeOpt.footerCssPx}px`,
+                  fontSize: `${footerFontPx}px`,
                 }}
               >
                 <div className="h-px bg-slate-300 mb-3" />
@@ -1997,7 +2022,8 @@ export function AdminCmsEditor({
                           )}
                         </div>
                         <p className="text-xs sm:text-sm text-slate-500 mt-0.5 tabular-nums">
-                          {tpl.category} · {fieldCount} campos · {describeBinding(tpl)}
+                          {tpl.category} · {fieldCount} campos · Corpo{' '}
+                          {resolveTemplateBodyFontSizePx(tpl)}px · {describeBinding(tpl)}
                         </p>
                       </div>
 
@@ -2175,6 +2201,19 @@ export function AdminCmsEditor({
                   </div>
                 </div>
 
+                <PixelSizeSlider
+                  id="tpl-body-font-px"
+                  label="Tamanho do Texto do Modelo / Contrato (px)"
+                  value={bodyFontSizePx}
+                  min={BODY_FONT_MIN_PX}
+                  max={BODY_FONT_MAX_PX}
+                  defaultValue={DEFAULT_BODY_FONT_PX}
+                  buttonStep={1}
+                  variant="font"
+                  onChange={setBodyFontSizePx}
+                  helperText="Aplicado na prévia A4, no editor abaixo e na geração final do PDF (10px a 20px)."
+                />
+
                 <div>
                   <label htmlFor="tpl-content" className="block text-sm font-semibold text-[#0B1D3A] mb-1.5">
                     Corpo Jurídico do Documento
@@ -2185,7 +2224,8 @@ export function AdminCmsEditor({
                     rows={13}
                     value={content}
                     onChange={(e) => setContent(e.target.value)}
-                    className="w-full p-4 rounded-xl border border-slate-300 text-sm leading-relaxed text-[#0F172A] font-sans"
+                    style={{ fontSize: `${bodyFontSizePx}px` }}
+                    className="w-full p-4 rounded-xl border border-slate-300 leading-relaxed text-[#0F172A] font-sans"
                     required
                   />
                 </div>
@@ -2468,7 +2508,10 @@ export function AdminCmsEditor({
                     {testPdfPreview.documentTitle}
                   </h4>
 
-                  <div className="space-y-3 text-xs sm:text-[13px] leading-relaxed text-slate-800 whitespace-pre-wrap text-justify font-serif">
+                  <div
+                    className="space-y-3 leading-relaxed text-slate-800 whitespace-pre-wrap text-justify font-serif"
+                    style={{ fontSize: `${testPdfPreview.bodyFontSizePx}px` }}
+                  >
                     {testPdfPreview.renderedText}
                   </div>
 
@@ -2490,7 +2533,7 @@ export function AdminCmsEditor({
                     }`}
                     style={{
                       fontFamily: getFontOption(testPdfPreview.footer.fontFamily).cssFamily,
-                      fontSize: `${getSizeOption(testPdfPreview.footer.textSize).footerCssPx}px`,
+                      fontSize: `${resolveFooterFontSizePx(testPdfPreview.footer)}px`,
                       color: normalizeHexColor(testPdfPreview.footer.textColor, '#475569'),
                     }}
                   >

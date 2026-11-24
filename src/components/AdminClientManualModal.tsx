@@ -361,6 +361,7 @@ export function AdminClientManualModal({
         const artifact = await generateLegalDocumentPdf({
           documentTitle: selectedTemplate.title,
           renderedText,
+          bodyFontSizePx: selectedTemplate.bodyFontSizePx,
           letterhead,
           header,
           footer,

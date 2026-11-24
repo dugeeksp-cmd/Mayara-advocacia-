@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Check, ClipboardCheck, Loader2, X } from 'lucide-react';
 import { dataService } from '../services/dataService';
 
-export const CURRENT_APP_VERSION = 'v2.6.0';
+export const CURRENT_APP_VERSION = 'v2.7.0';
 
 interface ChangelogReleaseItem {
   id: string;
@@ -11,6 +11,18 @@ interface ChangelogReleaseItem {
 }
 
 const RELEASE_ITEMS: ChangelogReleaseItem[] = [
+  {
+    id: 'pixel_precision_controls',
+    title: 'Controle Preciso em Pixels (px) para Fontes e Logotipo',
+    description:
+      'Sliders contínuos e botões de ajuste fino em pixels para textos de cabeçalho, rodapé e corpo do contrato, além de zoom proporcional (40px a 350px) com "Restaurar padrão" para logotipos.',
+  },
+  {
+    id: 'executive_admin_overview',
+    title: 'Tela Inicial Dinâmica com Central de Atenção e Indicadores Rápidos',
+    description:
+      'Resumo executivo no topo da tela inicial com alertas de documentos recebidos, cobrança rápida de pendências no WhatsApp e 4 cards clicáveis de métricas acima do Gerar Link.',
+  },
   {
     id: 'batch_apply_timbrado_templates',
     title: 'Aplicação em Lote ("Aplicar em Modelos") para Logos, Cabeçalhos e Rodapés',

@@ -173,6 +173,7 @@ export function AdminClientSummaryModal({
       const artifact = await generateLegalDocumentPdf({
         documentTitle: tpl.title,
         renderedText,
+        bodyFontSizePx: tpl.bodyFontSizePx,
         letterhead,
         header,
         footer,
@@ -251,6 +252,7 @@ export function AdminClientSummaryModal({
       const artifact = await generateLegalDocumentPdf({
         documentTitle: selectedAddTemplate.title,
         renderedText,
+        bodyFontSizePx: selectedAddTemplate.bodyFontSizePx,
         letterhead,
         header,
         footer,
