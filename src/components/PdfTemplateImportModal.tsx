@@ -187,6 +187,8 @@ export function PdfTemplateImportModal({
         oabNumber: extracted.headerData.oabNumber || 'OAB/RJ 229.359',
         subtitle: extracted.headerData.subtitle || '',
         alignment: 'center',
+        logoPosition: 'center',
+        textPosition: 'below',
         fontFamily: 'playfair',
         textSize: 'medium',
         textColor: '#0B1D3A',

@@ -62,6 +62,10 @@ service cloud.firestore {
       return val in ['left', 'center', 'right'];
     }
 
+    function isValidHeaderTextPosition(val) {
+      return val in ['below', 'above', 'beside'];
+    }
+
     function isValidHexColor(val) {
       return val is string && val.matches('^#[0-9a-fA-F]{6}$');
     }
@@ -87,6 +91,7 @@ service cloud.firestore {
         ]) &&
         data.keys().hasOnly([
           'id', 'name', 'officeTitle', 'oabNumber', 'subtitle', 'alignment',
+          'logoPosition', 'textPosition',
           'fontFamily', 'textSize', 'textColor', 'isDefault',
           'officeId', 'createdAt', 'updatedAt', 'updatedBy'
         ]) &&
@@ -96,6 +101,8 @@ service cloud.firestore {
         data.oabNumber is string && data.oabNumber.size() >= 2 && data.oabNumber.size() <= 60 &&
         (!('subtitle' in data) || (data.subtitle is string && data.subtitle.size() <= 160)) &&
         isValidAlignment(data.alignment) &&
+        (!('logoPosition' in data) || isValidAlignment(data.logoPosition)) &&
+        (!('textPosition' in data) || isValidHeaderTextPosition(data.textPosition)) &&
         isValidFontFamily(data.fontFamily) &&
         isValidTextSize(data.textSize) &&
         isValidHexColor(data.textColor) &&

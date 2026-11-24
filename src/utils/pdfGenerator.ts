@@ -7,6 +7,10 @@ import type {
 } from '../types/legal';
 import { sanitizeFilenamePart, sha256Hex } from './masksAndFormatters';
 import {
+  computeBesidePdfGeometry,
+  resolveHeaderLayout,
+} from './headerLayout';
+import {
   getFontOption,
   getSizeOption,
   hexToRgb,
@@ -28,6 +32,35 @@ const BOLD_PREFIXES = [
   'CLÁUSULA',
 ];
 
+function computeLogoBoxDimensions(
+  doc: jsPDF,
+  dataUrl: string,
+  maxWidthMm = 28,
+  maxHeightMm = 16
+): { width: number; height: number; format: 'PNG' | 'JPEG' } {
+  const format = dataUrl.includes('image/png') ? 'PNG' : 'JPEG';
+  try {
+    const props = doc.getImageProperties(dataUrl);
+    if (props?.width > 0 && props?.height > 0) {
+      const ratio = props.width / props.height;
+      let width = maxHeightMm * ratio;
+      let height = maxHeightMm;
+      if (width > maxWidthMm) {
+        width = maxWidthMm;
+        height = maxWidthMm / ratio;
+      }
+      return {
+        width: Math.max(8, Number(width.toFixed(2))),
+        height: Math.max(8, Number(height.toFixed(2))),
+        format,
+      };
+    }
+  } catch {
+    // Fallback to square logo dimensions if image metadata unavailable
+  }
+  return { width: 16, height: 16, format };
+}
+
 function drawResolvedHeader(
   doc: jsPDF,
   header: HeaderProfile | null,
@@ -44,58 +77,207 @@ function drawResolvedHeader(
     return 20;
   }
 
-  const align = header?.alignment || 'center';
-  const textX =
-    align === 'left' ? marginX : align === 'right' ? pageWidth - marginX : pageWidth / 2;
+  const contentWidth = pageWidth - marginX * 2;
+  const hasLogo = Boolean(logo?.dataUrl && logo.dataUrl.startsWith('data:image/'));
+  const logoDims = hasLogo && logo?.dataUrl ? computeLogoBoxDimensions(doc, logo.dataUrl) : null;
 
-  let textOffsetY = 19;
-  if (logo?.dataUrl && logo.dataUrl.startsWith('data:image/')) {
+  const layout = resolveHeaderLayout(header);
+  const logoAlignX = (logoW: number) =>
+    layout.logoPosition === 'left'
+      ? marginX
+      : layout.logoPosition === 'right'
+        ? pageWidth - marginX - logoW
+        : (pageWidth - logoW) / 2;
+
+  if (!header && logoDims && logo?.dataUrl) {
     try {
-      const imgFormat = logo.dataUrl.includes('image/png') ? 'PNG' : 'JPEG';
-      const logoW = 16;
-      const logoH = 16;
-      const logoX =
-        align === 'left'
-          ? marginX
-          : align === 'right'
-            ? pageWidth - marginX - logoW
-            : (pageWidth - logoW) / 2;
-      doc.addImage(logo.dataUrl, imgFormat, logoX, 10, logoW, logoH);
-      textOffsetY = 31;
+      doc.addImage(logo.dataUrl, logoDims.format, logoAlignX(logoDims.width), 10, logoDims.width, logoDims.height);
     } catch {
       // Ignore malformed image
     }
+    return 10 + logoDims.height + 9;
   }
 
   if (!header) {
-    return textOffsetY + 6;
+    return 20;
   }
 
   const fontOpt = getFontOption(header.fontFamily);
   const sizeOpt = getSizeOption(header.textSize);
   const [r, g, b] = hexToRgb(header.textColor);
-
-  // Office Title
-  doc.setFont(fontOpt.pdfFamily, 'bold');
-  doc.setFontSize(sizeOpt.headerTitlePdfPt);
-  doc.setTextColor(r, g, b);
-  doc.text(header.officeTitle.toUpperCase(), textX, textOffsetY, { align });
-
-  // OAB & Subtitle
-  doc.setFont(fontOpt.pdfFamily, 'bold');
-  doc.setFontSize(sizeOpt.headerSubPdfPt);
-  doc.setTextColor(154, 120, 53); // Matte Gold #9A7835
+  const titleText = header.officeTitle.toUpperCase();
   const oabLine = header.subtitle
     ? `${header.oabNumber}  |  ${header.subtitle}`
     : header.oabNumber;
-  doc.text(oabLine, textX, textOffsetY + 5.8, { align });
 
-  const dividerY = textOffsetY + 10;
+  const titleLineH = sizeOpt.headerTitlePdfPt * 0.44 + 0.6;
+  const subLineH = sizeOpt.headerSubPdfPt * 0.44 + 0.5;
+  const titleBaselineOffset = sizeOpt.headerTitlePdfPt * 0.35;
+
+  // HORIZONTAL 2-COLUMN LAYOUT ("beside") WHEN LOGO IS PRESENT
+  if (layout.textPosition === 'beside' && hasLogo && logoDims && logo?.dataUrl) {
+    const tentativeColW =
+      layout.logoPosition === 'center'
+        ? contentWidth - logoDims.width - 8
+        : contentWidth - logoDims.width - 6;
+
+    doc.setFont(fontOpt.pdfFamily, 'bold');
+    doc.setFontSize(sizeOpt.headerTitlePdfPt);
+    const titleLines = doc.splitTextToSize(titleText, Math.max(40, tentativeColW)) as string[];
+    const titleWidths = titleLines.map((line) => doc.getTextWidth(line));
+
+    doc.setFont(fontOpt.pdfFamily, 'bold');
+    doc.setFontSize(sizeOpt.headerSubPdfPt);
+    const subLines = doc.splitTextToSize(oabLine, Math.max(40, tentativeColW)) as string[];
+    const subWidths = subLines.map((line) => doc.getTextWidth(line));
+
+    const measuredTextWidth = Math.max(0, ...titleWidths, ...subWidths);
+    const subGap = 1.6;
+    const textBlockHeight =
+      titleLines.length * titleLineH + subGap + subLines.length * subLineH;
+
+    const geo = computeBesidePdfGeometry({
+      pageWidth,
+      marginX,
+      topY: 10.5,
+      logoW: logoDims.width,
+      logoH: logoDims.height,
+      logoPosition: layout.logoPosition,
+      textAlignment: layout.textAlignment,
+      textBlockHeight,
+      measuredTextWidth,
+    });
+
+    try {
+      doc.addImage(logo.dataUrl, logoDims.format, geo.logoX, geo.logoY, logoDims.width, logoDims.height);
+    } catch {
+      // Ignore malformed image
+    }
+
+    let cursorY = geo.firstTextTopY + titleBaselineOffset;
+    doc.setFont(fontOpt.pdfFamily, 'bold');
+    doc.setFontSize(sizeOpt.headerTitlePdfPt);
+    doc.setTextColor(r, g, b);
+    for (const line of titleLines) {
+      doc.text(line, geo.textAnchorX, cursorY, { align: geo.textAlign });
+      cursorY += titleLineH;
+    }
+
+    cursorY += subGap;
+    doc.setFont(fontOpt.pdfFamily, 'bold');
+    doc.setFontSize(sizeOpt.headerSubPdfPt);
+    doc.setTextColor(154, 120, 53); // Matte Gold #9A7835
+    for (const line of subLines) {
+      doc.text(line, geo.textAnchorX, cursorY, { align: geo.textAlign });
+      cursorY += subLineH;
+    }
+
+    doc.setDrawColor(184, 147, 74);
+    doc.setLineWidth(0.6);
+    doc.line(marginX, geo.dividerY, pageWidth - marginX, geo.dividerY);
+    return geo.nextBodyY;
+  }
+
+  // VERTICAL STACKED LAYOUTS ("below" or "above")
+  const textAlign = layout.textAlignment;
+  const textX =
+    textAlign === 'left'
+      ? marginX
+      : textAlign === 'right'
+        ? pageWidth - marginX
+        : pageWidth / 2;
+
+  doc.setFont(fontOpt.pdfFamily, 'bold');
+  doc.setFontSize(sizeOpt.headerTitlePdfPt);
+  const titleLines = doc.splitTextToSize(titleText, contentWidth) as string[];
+
+  doc.setFont(fontOpt.pdfFamily, 'bold');
+  doc.setFontSize(sizeOpt.headerSubPdfPt);
+  const subLines = doc.splitTextToSize(oabLine, contentWidth) as string[];
+
+  let cursorY = 11;
+
+  if (layout.textPosition === 'above') {
+    cursorY += titleBaselineOffset + 1;
+    doc.setFont(fontOpt.pdfFamily, 'bold');
+    doc.setFontSize(sizeOpt.headerTitlePdfPt);
+    doc.setTextColor(r, g, b);
+    for (const line of titleLines) {
+      doc.text(line, textX, cursorY, { align: textAlign });
+      cursorY += titleLineH;
+    }
+
+    cursorY += 1.2;
+    doc.setFont(fontOpt.pdfFamily, 'bold');
+    doc.setFontSize(sizeOpt.headerSubPdfPt);
+    doc.setTextColor(154, 120, 53);
+    for (const line of subLines) {
+      doc.text(line, textX, cursorY, { align: textAlign });
+      cursorY += subLineH;
+    }
+
+    if (hasLogo && logoDims && logo?.dataUrl) {
+      const imgY = cursorY + 1;
+      try {
+        doc.addImage(
+          logo.dataUrl,
+          logoDims.format,
+          logoAlignX(logoDims.width),
+          imgY,
+          logoDims.width,
+          logoDims.height
+        );
+      } catch {
+        // Ignore malformed image
+      }
+      cursorY = imgY + logoDims.height + 4;
+    } else {
+      cursorY += 2.5;
+    }
+  } else {
+    // Default: "below" (Image on top, text below)
+    if (hasLogo && logoDims && logo?.dataUrl) {
+      try {
+        doc.addImage(
+          logo.dataUrl,
+          logoDims.format,
+          logoAlignX(logoDims.width),
+          10,
+          logoDims.width,
+          logoDims.height
+        );
+      } catch {
+        // Ignore malformed image
+      }
+      cursorY = 10 + logoDims.height + 5.5;
+    } else {
+      cursorY = 17;
+    }
+
+    doc.setFont(fontOpt.pdfFamily, 'bold');
+    doc.setFontSize(sizeOpt.headerTitlePdfPt);
+    doc.setTextColor(r, g, b);
+    for (const line of titleLines) {
+      doc.text(line, textX, cursorY, { align: textAlign });
+      cursorY += titleLineH;
+    }
+
+    cursorY += 1.2;
+    doc.setFont(fontOpt.pdfFamily, 'bold');
+    doc.setFontSize(sizeOpt.headerSubPdfPt);
+    doc.setTextColor(154, 120, 53);
+    for (const line of subLines) {
+      doc.text(line, textX, cursorY, { align: textAlign });
+      cursorY += subLineH;
+    }
+    cursorY += 2;
+  }
+
   doc.setDrawColor(184, 147, 74);
   doc.setLineWidth(0.6);
-  doc.line(marginX, dividerY, pageWidth - marginX, dividerY);
+  doc.line(marginX, cursorY, pageWidth - marginX, cursorY);
 
-  return dividerY + 8;
+  return cursorY + 8;
 }
 
 function drawResolvedFooter(

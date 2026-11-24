@@ -1,6 +1,8 @@
 export type SignatureMethod = 'none' | 'govbr';
 export type ServiceLinkStatus = 'pendente' | 'assinando' | 'concluido';
 export type HeaderAlignment = 'left' | 'center' | 'right';
+export type HeaderLogoPosition = 'left' | 'center' | 'right';
+export type HeaderTextPosition = 'below' | 'above' | 'beside';
 export type CustomFieldType = 'text' | 'number' | 'date' | 'cpf_cnpj' | 'email' | 'phone';
 
 export type TimbradoFontFamily =
@@ -27,6 +29,8 @@ export interface HeaderProfile {
   oabNumber: string;
   subtitle?: string;
   alignment: HeaderAlignment;
+  logoPosition?: HeaderLogoPosition;
+  textPosition?: HeaderTextPosition;
   fontFamily: TimbradoFontFamily;
   textSize: TimbradoTextSize;
   textColor: string;

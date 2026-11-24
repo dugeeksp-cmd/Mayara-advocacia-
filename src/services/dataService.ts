@@ -44,6 +44,10 @@ import {
   OFFICE_SCOPE_ID,
 } from '../utils/timbradoTheme';
 import { findClientByCpf as findClientByCpfInList } from '../utils/legalFieldOptions';
+import {
+  applyBatchAssetToTemplateList,
+  type BatchAssetType,
+} from '../utils/headerLayout';
 import { auth, db, storage } from './firebaseConfig';
 
 export type PersistenceMode = 'firebase' | 'local';
@@ -240,13 +244,16 @@ export function getPersistenceMode(): PersistenceMode {
 // Mappers
 // ---------------------------------------------------------------------------
 function mapHeaderDoc(data: Record<string, unknown>): HeaderProfile {
+  const alignment = (data.alignment as HeaderProfile['alignment']) || 'center';
   return {
     id: String(data.id),
     name: String(data.name || 'Cabeçalho'),
     officeTitle: String(data.officeTitle || DEFAULT_LETTERHEAD.officeTitle),
     oabNumber: String(data.oabNumber || DEFAULT_LETTERHEAD.oabNumber),
     subtitle: typeof data.subtitle === 'string' ? data.subtitle : '',
-    alignment: (data.alignment as HeaderProfile['alignment']) || 'center',
+    alignment,
+    logoPosition: (data.logoPosition as HeaderProfile['logoPosition']) || alignment || 'center',
+    textPosition: (data.textPosition as HeaderProfile['textPosition']) || 'below',
     fontFamily: (data.fontFamily as HeaderProfile['fontFamily']) || 'playfair',
     textSize: (data.textSize as HeaderProfile['textSize']) || 'medium',
     textColor: typeof data.textColor === 'string' ? data.textColor : '#0B1D3A',
@@ -408,6 +415,8 @@ export const dataService = {
               oabNumber: h.oabNumber,
               subtitle: h.subtitle || '',
               alignment: h.alignment,
+              logoPosition: h.logoPosition || h.alignment || 'center',
+              textPosition: h.textPosition || 'below',
               fontFamily: h.fontFamily,
               textSize: h.textSize,
               textColor: h.textColor,
@@ -611,6 +620,8 @@ export const dataService = {
     const saved: HeaderProfile = {
       ...input,
       subtitle: input.subtitle ?? '',
+      logoPosition: input.logoPosition || input.alignment || 'center',
+      textPosition: input.textPosition || 'below',
       officeId: OFFICE_SCOPE_ID,
       createdAt: existing?.createdAt || input.createdAt || nowIso,
       updatedAt: nowIso,
@@ -637,6 +648,8 @@ export const dataService = {
         oabNumber: saved.oabNumber.trim(),
         subtitle: (saved.subtitle || '').trim(),
         alignment: saved.alignment,
+        logoPosition: saved.logoPosition || saved.alignment || 'center',
+        textPosition: saved.textPosition || 'below',
         fontFamily: saved.fontFamily,
         textSize: saved.textSize,
         textColor: saved.textColor,
@@ -1229,6 +1242,77 @@ export const dataService = {
       console.warn('Firestore deleteTemplate fallback:', err);
       setSyncState('fallback');
     }
+  },
+
+  /**
+   * Batch-applies a Header, Footer, or Logo ONLY to selected DocumentTemplates
+   * so future generated documents adopt the new pattern without altering existing
+   * atendimentos or previously generated/signed PDFs.
+   */
+  async applyAssetToTemplates(params: {
+    assetType: BatchAssetType;
+    assetId: string;
+    templateIds: string[];
+  }): Promise<DocumentTemplate[]> {
+    const { assetType, assetId, templateIds } = params;
+    if (templateIds.length === 0) {
+      return readCache<DocumentTemplate[]>(CACHE_KEYS.templates, DEFAULT_TEMPLATES);
+    }
+
+    const nowIso = new Date().toISOString();
+    const cached = readCache<DocumentTemplate[]>(CACHE_KEYS.templates, DEFAULT_TEMPLATES);
+    const updatedList = applyBatchAssetToTemplateList(
+      cached,
+      assetType,
+      assetId,
+      templateIds,
+      nowIso
+    );
+    writeCache(CACHE_KEYS.templates, updatedList);
+    notifyLocal(localTemplateListeners, updatedList);
+
+    const fieldKey: 'headerId' | 'footerId' | 'logoId' =
+      assetType === 'header' ? 'headerId' : assetType === 'footer' ? 'footerId' : 'logoId';
+
+    try {
+      await Promise.all(
+        templateIds.map(async (tplId) => {
+          const docRef = doc(db, 'templates', tplId);
+          const snap = await getDoc(docRef);
+          if (snap.exists()) {
+            await updateDoc(docRef, {
+              [fieldKey]: assetId,
+              updatedAt: serverTimestamp(),
+            });
+          } else {
+            const localTpl = updatedList.find((t) => t.id === tplId);
+            if (localTpl) {
+              await setDoc(docRef, {
+                id: localTpl.id,
+                title: localTpl.title,
+                category: localTpl.category,
+                content: localTpl.content,
+                isDefault: localTpl.isDefault,
+                customFields: localTpl.customFields ?? [],
+                headerId: localTpl.headerId === undefined ? null : localTpl.headerId,
+                footerId: localTpl.footerId === undefined ? null : localTpl.footerId,
+                logoId: localTpl.logoId === undefined ? null : localTpl.logoId,
+                officeId: OFFICE_SCOPE_ID,
+                ownerUid: localTpl.ownerUid || actorId(),
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+              });
+            }
+          }
+        })
+      );
+      setSyncState('cloud');
+    } catch (err) {
+      console.warn('Firestore applyAssetToTemplates fallback:', err);
+      setSyncState('fallback');
+    }
+
+    return updatedList;
   },
 
   // -------------------------------------------------------------------------

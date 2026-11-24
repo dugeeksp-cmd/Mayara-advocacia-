@@ -13,6 +13,7 @@ import {
   FileUp,
   ImagePlus,
   LayoutTemplate,
+  Layers,
   Loader2,
   PanelBottom,
   Plus,
@@ -22,13 +23,17 @@ import {
   X,
 } from 'lucide-react';
 import { PdfTemplateImportModal } from './PdfTemplateImportModal';
+import { BatchApplyTemplatesModal } from './BatchApplyTemplatesModal';
+import { HeaderPreviewBlock } from './HeaderPreviewBlock';
 import type {
   CustomFieldType,
   CustomTemplateField,
   DocumentTemplate,
   FooterProfile,
   HeaderAlignment,
+  HeaderLogoPosition,
   HeaderProfile,
+  HeaderTextPosition,
   LetterheadSettings,
   LogoAsset,
   TimbradoFontFamily,
@@ -40,6 +45,10 @@ import type {
   SaveLogoInput,
   SaveTemplateInput,
 } from '../services/dataService';
+import {
+  getRecommendedTextAlignment,
+  type BatchAssetType,
+} from '../utils/headerLayout';
 import { sanitizeFilenamePart } from '../utils/masksAndFormatters';
 import {
   AVAILABLE_TAGS_FOR_EDITOR,
@@ -79,6 +88,11 @@ interface AdminCmsEditorProps {
   onSaveLetterhead: (
     settings: Omit<LetterheadSettings, 'updatedAt' | 'updatedBy'>
   ) => Promise<void>;
+  onBatchApplyAsset: (params: {
+    assetType: BatchAssetType;
+    assetId: string;
+    templateIds: string[];
+  }) => Promise<void>;
 }
 
 const FIELD_TYPE_LABELS: Record<CustomFieldType, string> = {
@@ -148,9 +162,17 @@ export function AdminCmsEditor({
   onSaveLogo,
   onDeleteLogo,
   onSaveLetterhead,
+  onBatchApplyAsset,
 }: AdminCmsEditorProps) {
   const [cmsView, setCmsView] = useState<CmsView>('hub');
   const [feedback, setFeedback] = useState<string | null>(null);
+
+  // Batch Apply Modal State (for Logos, Headers, Footers)
+  const [batchModalTarget, setBatchModalTarget] = useState<{
+    assetType: BatchAssetType;
+    assetId: string;
+    assetName: string;
+  } | null>(null);
 
   // -------------------------------------------------------------------------
   // Header Profile Editor State
@@ -164,6 +186,8 @@ export function AdminCmsEditor({
     oabNumber: initialHeader?.oabNumber || letterhead.oabNumber,
     subtitle: initialHeader?.subtitle || letterhead.subtitle || '',
     alignment: (initialHeader?.alignment || 'center') as HeaderAlignment,
+    logoPosition: (initialHeader?.logoPosition || initialHeader?.alignment || 'center') as HeaderLogoPosition,
+    textPosition: (initialHeader?.textPosition || 'below') as HeaderTextPosition,
     fontFamily: (initialHeader?.fontFamily || 'playfair') as TimbradoFontFamily,
     textSize: (initialHeader?.textSize || 'medium') as TimbradoTextSize,
     textColor: initialHeader?.textColor || '#0B1D3A',
@@ -266,6 +290,8 @@ export function AdminCmsEditor({
       oabNumber: h.oabNumber,
       subtitle: h.subtitle || '',
       alignment: h.alignment,
+      logoPosition: h.logoPosition || h.alignment || 'center',
+      textPosition: h.textPosition || 'below',
       fontFamily: h.fontFamily,
       textSize: h.textSize,
       textColor: h.textColor,
@@ -283,6 +309,8 @@ export function AdminCmsEditor({
       oabNumber: 'OAB/RJ 229.359',
       subtitle: '',
       alignment: 'center',
+      logoPosition: 'center',
+      textPosition: 'below',
       fontFamily: 'playfair',
       textSize: 'medium',
       textColor: '#0B1D3A',
@@ -291,9 +319,8 @@ export function AdminCmsEditor({
     setFeedback(null);
   }
 
-  async function handleSaveHeaderSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!headerForm.name.trim() || !headerForm.officeTitle.trim()) return;
+  async function saveCurrentHeader(): Promise<HeaderProfile | null> {
+    if (!headerForm.name.trim() || !headerForm.officeTitle.trim()) return null;
     setSavingHeader(true);
     setFeedback(null);
     try {
@@ -308,6 +335,8 @@ export function AdminCmsEditor({
         oabNumber: headerForm.oabNumber.trim(),
         subtitle: headerForm.subtitle.trim(),
         alignment: headerForm.alignment,
+        logoPosition: headerForm.logoPosition,
+        textPosition: headerForm.textPosition,
         fontFamily: headerForm.fontFamily,
         textSize: headerForm.textSize,
         textColor: normalizeHexColor(headerForm.textColor, '#0B1D3A'),
@@ -316,8 +345,25 @@ export function AdminCmsEditor({
       setIsNewHeader(false);
       setHeaderFormId(saved.id);
       setFeedback(`Cabeçalho "${saved.name}" salvo e sincronizado na nuvem.`);
+      return saved;
     } finally {
       setSavingHeader(false);
+    }
+  }
+
+  async function handleSaveHeaderSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    await saveCurrentHeader();
+  }
+
+  async function handleSaveAndApplyHeader() {
+    const saved = await saveCurrentHeader();
+    if (saved) {
+      setBatchModalTarget({
+        assetType: 'header',
+        assetId: saved.id,
+        assetName: saved.name,
+      });
     }
   }
 
@@ -362,9 +408,8 @@ export function AdminCmsEditor({
     setFeedback(null);
   }
 
-  async function handleSaveFooterSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!footerForm.name.trim() || !footerForm.addressFooter.trim()) return;
+  async function saveCurrentFooter(): Promise<FooterProfile | null> {
+    if (!footerForm.name.trim() || !footerForm.addressFooter.trim()) return null;
     setSavingFooter(true);
     setFeedback(null);
     try {
@@ -389,8 +434,25 @@ export function AdminCmsEditor({
       setIsNewFooter(false);
       setFooterFormId(saved.id);
       setFeedback(`Rodapé "${saved.name}" salvo e sincronizado na nuvem.`);
+      return saved;
     } finally {
       setSavingFooter(false);
+    }
+  }
+
+  async function handleSaveFooterSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    await saveCurrentFooter();
+  }
+
+  async function handleSaveAndApplyFooter() {
+    const saved = await saveCurrentFooter();
+    if (saved) {
+      setBatchModalTarget({
+        assetType: 'footer',
+        assetId: saved.id,
+        assetName: saved.name,
+      });
     }
   }
 
@@ -882,13 +944,28 @@ export function AdminCmsEditor({
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex flex-wrap items-center gap-1.5">
                     <button
                       type="button"
                       onClick={() => selectHeaderToEdit(h)}
                       className="min-h-[36px] flex-1 px-2.5 py-1 rounded-lg bg-white border border-slate-300 text-xs font-semibold text-[#0B1D3A] hover:bg-slate-50"
                     >
                       Editar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setBatchModalTarget({
+                          assetType: 'header',
+                          assetId: h.id,
+                          assetName: h.name,
+                        })
+                      }
+                      aria-label={`Aplicar cabeçalho ${h.name} em modelos`}
+                      className="min-h-[36px] px-2.5 py-1 rounded-lg bg-[#F7F1E3]/70 border border-[#B8934A] text-xs font-semibold text-[#0B1D3A] hover:bg-[#F7F1E3] inline-flex items-center gap-1"
+                    >
+                      <Layers className="w-3 h-3 text-[#9A7835]" aria-hidden="true" />
+                      Aplicar em Modelos
                     </button>
                     {!h.isDefault && (
                       <button
@@ -1065,35 +1142,118 @@ export function AdminCmsEditor({
                 </div>
               </div>
 
-              <div>
-                <span className="block text-sm font-semibold text-[#0B1D3A] mb-2">
-                  Alinhamento do Cabeçalho
-                </span>
-                <div className="grid grid-cols-3 gap-2">
-                  {(
-                    [
-                      { id: 'left', label: 'Esquerda', icon: AlignLeft },
-                      { id: 'center', label: 'Centralizado', icon: AlignCenter },
-                      { id: 'right', label: 'Direita', icon: AlignRight },
-                    ] as const
-                  ).map((opt) => {
-                    const Icon = opt.icon;
-                    return (
+              {/* Layout Controls: Logo Position + Text Position relative to Image + Text Alignment */}
+              <div className="p-4 rounded-xl bg-[#F7F8FA] border border-slate-200 space-y-4">
+                <div>
+                  <span className="block text-sm font-semibold text-[#0B1D3A] mb-2">
+                    Posição da Imagem / Logotipo
+                  </span>
+                  <div className="grid grid-cols-3 gap-2">
+                    {(
+                      [
+                        { id: 'left', label: 'Esquerda', icon: AlignLeft },
+                        { id: 'center', label: 'Centro', icon: AlignCenter },
+                        { id: 'right', label: 'Direita', icon: AlignRight },
+                      ] as const
+                    ).map((opt) => {
+                      const Icon = opt.icon;
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() =>
+                            setHeaderForm((p) => ({
+                              ...p,
+                              logoPosition: opt.id,
+                              alignment: getRecommendedTextAlignment(
+                                opt.id,
+                                p.textPosition,
+                                p.alignment
+                              ),
+                            }))
+                          }
+                          className={`min-h-[44px] px-3 py-2 rounded-xl border text-xs sm:text-sm font-semibold inline-flex items-center justify-center gap-1.5 transition-colors ${
+                            headerForm.logoPosition === opt.id
+                              ? 'bg-[#0B1D3A] text-white border-[#0B1D3A]'
+                              : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                          }`}
+                        >
+                          <Icon className="w-4 h-4" aria-hidden="true" />
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div>
+                  <span className="block text-sm font-semibold text-[#0B1D3A] mb-2">
+                    Posição do Texto em relação à Imagem
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    {(
+                      [
+                        { id: 'below', label: 'Abaixo da imagem' },
+                        { id: 'above', label: 'Acima da imagem' },
+                        { id: 'beside', label: 'Ao lado da imagem' },
+                      ] as const
+                    ).map((opt) => (
                       <button
                         key={opt.id}
                         type="button"
-                        onClick={() => setHeaderForm((p) => ({ ...p, alignment: opt.id }))}
-                        className={`min-h-[44px] px-3 py-2 rounded-xl border text-xs sm:text-sm font-semibold inline-flex items-center justify-center gap-1.5 transition-colors ${
-                          headerForm.alignment === opt.id
+                        onClick={() =>
+                          setHeaderForm((p) => ({
+                            ...p,
+                            textPosition: opt.id,
+                            alignment: getRecommendedTextAlignment(
+                              p.logoPosition,
+                              opt.id,
+                              p.alignment
+                            ),
+                          }))
+                        }
+                        className={`min-h-[44px] px-3 py-2 rounded-xl border text-xs sm:text-sm font-semibold inline-flex items-center justify-center transition-colors ${
+                          headerForm.textPosition === opt.id
                             ? 'bg-[#0B1D3A] text-white border-[#0B1D3A]'
                             : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
                         }`}
                       >
-                        <Icon className="w-4 h-4" aria-hidden="true" />
                         {opt.label}
                       </button>
-                    );
-                  })}
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <span className="block text-sm font-semibold text-[#0B1D3A] mb-2">
+                    Alinhamento do Texto
+                  </span>
+                  <div className="grid grid-cols-3 gap-2">
+                    {(
+                      [
+                        { id: 'left', label: 'Esquerda', icon: AlignLeft },
+                        { id: 'center', label: 'Centralizado', icon: AlignCenter },
+                        { id: 'right', label: 'Direita', icon: AlignRight },
+                      ] as const
+                    ).map((opt) => {
+                      const Icon = opt.icon;
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => setHeaderForm((p) => ({ ...p, alignment: opt.id }))}
+                          className={`min-h-[44px] px-3 py-2 rounded-xl border text-xs sm:text-sm font-semibold inline-flex items-center justify-center gap-1.5 transition-colors ${
+                            headerForm.alignment === opt.id
+                              ? 'bg-[#0B1D3A] text-white border-[#0B1D3A]'
+                              : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                          }`}
+                        >
+                          <Icon className="w-4 h-4" aria-hidden="true" />
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
 
@@ -1107,11 +1267,11 @@ export function AdminCmsEditor({
                 Definir como cabeçalho padrão dos documentos
               </label>
 
-              <div>
+              <div className="flex flex-wrap items-center gap-2.5">
                 <button
                   type="submit"
                   disabled={savingHeader}
-                  className="min-h-[48px] px-6 py-3 rounded-xl bg-[#0B1D3A] text-white text-sm font-semibold hover:bg-[#132B52] disabled:opacity-60 inline-flex items-center gap-2"
+                  className="min-h-[48px] px-5 py-3 rounded-xl bg-[#0B1D3A] text-white text-sm font-semibold hover:bg-[#132B52] disabled:opacity-60 inline-flex items-center gap-2"
                 >
                   <Save className="w-4 h-4" aria-hidden="true" />
                   {savingHeader
@@ -1120,63 +1280,32 @@ export function AdminCmsEditor({
                       ? 'Criar Cabeçalho'
                       : 'Salvar Alterações do Cabeçalho'}
                 </button>
+                <button
+                  type="button"
+                  disabled={savingHeader || !headerForm.name.trim() || !headerForm.officeTitle.trim()}
+                  onClick={() => void handleSaveAndApplyHeader()}
+                  className="min-h-[48px] px-5 py-3 rounded-xl border border-[#B8934A] bg-[#F7F1E3]/70 text-[#0B1D3A] text-sm font-semibold hover:bg-[#F7F1E3] disabled:opacity-60 inline-flex items-center gap-2"
+                >
+                  <Layers className="w-4 h-4 text-[#9A7835]" aria-hidden="true" />
+                  Salvar e Aplicar em Modelos
+                </button>
               </div>
             </form>
 
             {/* Live Header Preview */}
-            <div className="lg:col-span-6 bg-[#F7F8FA] border border-slate-200 rounded-xl p-6 flex flex-col justify-between">
+            <div className="lg:col-span-6 lg:sticky lg:top-6 self-start bg-[#F7F8FA] border border-slate-200 rounded-xl p-6 flex flex-col justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3">
                   Pré-visualização em Tempo Real no A4
                 </p>
                 <div className="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-xs">
                   <div className="h-2 bg-[#0B1D3A]" />
-                  <div
-                    className={`p-6 ${
-                      headerForm.alignment === 'left'
-                        ? 'text-left'
-                        : headerForm.alignment === 'right'
-                          ? 'text-right'
-                          : 'text-center'
-                    }`}
-                    style={{ fontFamily: headerFontOpt.cssFamily }}
-                  >
-                    {defaultLogo?.dataUrl && (
-                      <img
-                        src={defaultLogo.dataUrl}
-                        alt="Logo padrão"
-                        className={`h-12 w-auto object-contain mb-3 ${
-                          headerForm.alignment === 'center'
-                            ? 'mx-auto'
-                            : headerForm.alignment === 'right'
-                              ? 'ml-auto'
-                              : ''
-                        }`}
-                      />
-                    )}
-                    <p
-                      className="font-bold uppercase leading-snug"
-                      style={{
-                        fontSize: `${headerSizeOpt.headerTitleCssPx}px`,
-                        color: headerColorHex,
-                      }}
-                    >
-                      {headerForm.officeTitle || 'TÍTULO DO ESCRITÓRIO'}
-                    </p>
-                    <p
-                      className="font-semibold text-[#9A7835] mt-1"
-                      style={{ fontSize: `${headerSizeOpt.headerSubCssPx}px` }}
-                    >
-                      {headerForm.oabNumber}
-                      {headerForm.subtitle ? ` | ${headerForm.subtitle}` : ''}
-                    </p>
-                    <div className="h-0.5 bg-[#B8934A] mt-4" />
-                    <div className="mt-5 space-y-2 opacity-30">
-                      <div className="h-2 bg-slate-300 rounded w-3/4 mx-auto" />
-                      <div className="h-2 bg-slate-200 rounded w-full" />
-                      <div className="h-2 bg-slate-200 rounded w-5/6" />
-                    </div>
-                  </div>
+                  <HeaderPreviewBlock
+                    header={headerForm}
+                    logo={defaultLogo}
+                    showLogoPlaceholderIfEmpty
+                    showSkeletonBody
+                  />
                 </div>
               </div>
 
@@ -1250,13 +1379,28 @@ export function AdminCmsEditor({
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex flex-wrap items-center gap-1.5">
                     <button
                       type="button"
                       onClick={() => selectFooterToEdit(f)}
                       className="min-h-[36px] flex-1 px-2.5 py-1 rounded-lg bg-white border border-slate-300 text-xs font-semibold text-[#0B1D3A] hover:bg-slate-50"
                     >
                       Editar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setBatchModalTarget({
+                          assetType: 'footer',
+                          assetId: f.id,
+                          assetName: f.name,
+                        })
+                      }
+                      aria-label={`Aplicar rodapé ${f.name} em modelos`}
+                      className="min-h-[36px] px-2.5 py-1 rounded-lg bg-[#F7F1E3]/70 border border-[#B8934A] text-xs font-semibold text-[#0B1D3A] hover:bg-[#F7F1E3] inline-flex items-center gap-1"
+                    >
+                      <Layers className="w-3 h-3 text-[#9A7835]" aria-hidden="true" />
+                      Aplicar em Modelos
                     </button>
                     {!f.isDefault && (
                       <button
@@ -1504,11 +1648,11 @@ export function AdminCmsEditor({
                 Definir como rodapé padrão dos documentos
               </label>
 
-              <div>
+              <div className="flex flex-wrap items-center gap-2.5">
                 <button
                   type="submit"
                   disabled={savingFooter}
-                  className="min-h-[48px] px-6 py-3 rounded-xl bg-[#0B1D3A] text-white text-sm font-semibold hover:bg-[#132B52] disabled:opacity-60 inline-flex items-center gap-2"
+                  className="min-h-[48px] px-5 py-3 rounded-xl bg-[#0B1D3A] text-white text-sm font-semibold hover:bg-[#132B52] disabled:opacity-60 inline-flex items-center gap-2"
                 >
                   <Save className="w-4 h-4" aria-hidden="true" />
                   {savingFooter
@@ -1516,6 +1660,17 @@ export function AdminCmsEditor({
                     : isNewFooter
                       ? 'Criar Rodapé'
                       : 'Salvar Rodapé do PDF'}
+                </button>
+                <button
+                  type="button"
+                  disabled={
+                    savingFooter || !footerForm.name.trim() || !footerForm.addressFooter.trim()
+                  }
+                  onClick={() => void handleSaveAndApplyFooter()}
+                  className="min-h-[48px] px-5 py-3 rounded-xl border border-[#B8934A] bg-[#F7F1E3]/70 text-[#0B1D3A] text-sm font-semibold hover:bg-[#F7F1E3] disabled:opacity-60 inline-flex items-center gap-2"
+                >
+                  <Layers className="w-4 h-4 text-[#9A7835]" aria-hidden="true" />
+                  Salvar e Aplicar em Modelos
                 </button>
               </div>
             </form>
@@ -1678,12 +1833,27 @@ export function AdminCmsEditor({
                         />
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setBatchModalTarget({
+                              assetType: 'logo',
+                              assetId: logo.id,
+                              assetName: logo.name,
+                            })
+                          }
+                          aria-label={`Aplicar logotipo ${logo.name} em modelos`}
+                          className="min-h-[38px] flex-1 px-3 py-1.5 rounded-lg border border-[#B8934A] bg-[#F7F1E3]/70 text-xs font-semibold text-[#0B1D3A] hover:bg-[#F7F1E3] inline-flex items-center justify-center gap-1.5 whitespace-nowrap"
+                        >
+                          <Layers className="w-3.5 h-3.5 text-[#9A7835]" aria-hidden="true" />
+                          Aplicar em Modelos
+                        </button>
                         {!logo.isDefault && (
                           <button
                             type="button"
                             onClick={() => void onSaveLogo({ ...logo, isDefault: true })}
-                            className="min-h-[38px] flex-1 px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-xs font-semibold text-[#0B1D3A] hover:bg-slate-50"
+                            className="min-h-[38px] px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-xs font-semibold text-[#0B1D3A] hover:bg-slate-50"
                           >
                             Definir Padrão
                           </button>
@@ -2276,53 +2446,11 @@ export function AdminCmsEditor({
                 <div className="h-2 bg-[#0B1D3A]" />
 
                 {testPdfPreview.header && (
-                  <div
-                    className={`px-8 pt-6 pb-4 ${
-                      testPdfPreview.header.alignment === 'left'
-                        ? 'text-left'
-                        : testPdfPreview.header.alignment === 'right'
-                          ? 'text-right'
-                          : 'text-center'
-                    }`}
-                    style={{
-                      fontFamily: getFontOption(testPdfPreview.header.fontFamily).cssFamily,
-                    }}
-                  >
-                    {testPdfPreview.logo?.dataUrl && (
-                      <img
-                        src={testPdfPreview.logo.dataUrl}
-                        alt={testPdfPreview.logo.name}
-                        className={`h-12 w-auto object-contain mb-3 ${
-                          testPdfPreview.header.alignment === 'center'
-                            ? 'mx-auto'
-                            : testPdfPreview.header.alignment === 'right'
-                              ? 'ml-auto'
-                              : ''
-                        }`}
-                      />
-                    )}
-                    <p
-                      className="font-bold uppercase leading-snug"
-                      style={{
-                        fontSize: `${getSizeOption(testPdfPreview.header.textSize).headerTitleCssPx}px`,
-                        color: normalizeHexColor(testPdfPreview.header.textColor, '#0B1D3A'),
-                      }}
-                    >
-                      {testPdfPreview.header.officeTitle}
-                    </p>
-                    <p
-                      className="font-semibold text-[#9A7835] mt-1"
-                      style={{
-                        fontSize: `${getSizeOption(testPdfPreview.header.textSize).headerSubCssPx}px`,
-                      }}
-                    >
-                      {testPdfPreview.header.oabNumber}
-                      {testPdfPreview.header.subtitle
-                        ? ` | ${testPdfPreview.header.subtitle}`
-                        : ''}
-                    </p>
-                    <div className="h-0.5 bg-[#B8934A] mt-4" />
-                  </div>
+                  <HeaderPreviewBlock
+                    header={testPdfPreview.header}
+                    logo={testPdfPreview.logo}
+                    paddingClass="px-8 pt-6 pb-2"
+                  />
                 )}
 
                 {!testPdfPreview.header && testPdfPreview.logo?.dataUrl && (
@@ -2383,6 +2511,36 @@ export function AdminCmsEditor({
             </div>
           </div>
         </div>
+      )}
+
+      {/* MODAL: BATCH APPLY HEADER / FOOTER / LOGO TO SELECTED OR ALL TEMPLATES */}
+      {batchModalTarget && (
+        <BatchApplyTemplatesModal
+          isOpen
+          assetType={batchModalTarget.assetType}
+          assetId={batchModalTarget.assetId}
+          assetName={batchModalTarget.assetName}
+          templates={templates}
+          onClose={() => setBatchModalTarget(null)}
+          onApply={async (templateIds) => {
+            await onBatchApplyAsset({
+              assetType: batchModalTarget.assetType,
+              assetId: batchModalTarget.assetId,
+              templateIds,
+            });
+            const label =
+              batchModalTarget.assetType === 'header'
+                ? 'Cabeçalho'
+                : batchModalTarget.assetType === 'footer'
+                  ? 'Rodapé'
+                  : 'Logotipo';
+            setFeedback(
+              `${label} "${batchModalTarget.assetName}" aplicado em ${templateIds.length} ${
+                templateIds.length === 1 ? 'modelo' : 'modelos'
+              } para futuros documentos.`
+            );
+          }}
+        />
       )}
     </div>
   );

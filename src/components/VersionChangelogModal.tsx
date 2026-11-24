@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Check, ClipboardCheck, Loader2, X } from 'lucide-react';
 import { dataService } from '../services/dataService';
 
-export const CURRENT_APP_VERSION = 'v2.5.0';
+export const CURRENT_APP_VERSION = 'v2.6.0';
 
 interface ChangelogReleaseItem {
   id: string;
@@ -11,6 +11,18 @@ interface ChangelogReleaseItem {
 }
 
 const RELEASE_ITEMS: ChangelogReleaseItem[] = [
+  {
+    id: 'batch_apply_timbrado_templates',
+    title: 'Aplicação em Lote ("Aplicar em Modelos") para Logos, Cabeçalhos e Rodapés',
+    description:
+      'Atualize modelos selecionados ou todos de uma vez diretamente dos cards ou ao salvar cabeçalhos e rodapés, mantendo documentos anteriores intactos.',
+  },
+  {
+    id: 'header_image_text_layout_controls',
+    title: 'Controles Avançados de Layout no Cabeçalho (Imagem + Texto)',
+    description:
+      'Escolha a posição do logotipo (Esquerda, Centro, Direita) e do texto (Abaixo, Acima ou Ao lado em 2 colunas) com reflexo fiel na prévia A4 e no PDF.',
+  },
   {
     id: 'govbr_exclusive_signature',
     title: 'Assinatura Eletrônica 100% Exclusiva via Gov.br',

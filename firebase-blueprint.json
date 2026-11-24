@@ -48,6 +48,8 @@
         "oabNumber": { "type": "string", "minLength": 2, "maxLength": 60 },
         "subtitle": { "type": "string", "maxLength": 160 },
         "alignment": { "type": "string", "enum": ["left", "center", "right"] },
+        "logoPosition": { "type": "string", "enum": ["left", "center", "right"] },
+        "textPosition": { "type": "string", "enum": ["below", "above", "beside"] },
         "fontFamily": {
           "type": "string",
           "enum": ["playfair", "inter", "times", "georgia", "montserrat", "lora"]

@@ -307,6 +307,9 @@ export function AdminDashboard({
                 const saved = await dataService.saveLetterhead(settings);
                 onLetterheadUpdated(saved);
               }}
+              onBatchApplyAsset={async (params) => {
+                await dataService.applyAssetToTemplates(params);
+              }}
             />
           )}
 
