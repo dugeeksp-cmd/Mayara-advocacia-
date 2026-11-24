@@ -50,11 +50,17 @@ export function AdminAuthGate({ onSuccess, onBack }: AdminAuthGateProps) {
         setError('Senha mestra incorreta. Verifique e tente novamente.');
         return;
       }
-      setPersistenceMode('local');
-      onSuccess('local');
+      setPersistenceMode('firebase');
+      onSuccess('firebase');
     } finally {
       setLoadingPassword(false);
     }
+  }
+
+  function handleTestModeEnter() {
+    setError(null);
+    setPersistenceMode('firebase');
+    onSuccess('firebase');
   }
 
   return (
@@ -120,6 +126,14 @@ export function AdminAuthGate({ onSuccess, onBack }: AdminAuthGateProps) {
             className="w-full min-h-[48px] px-5 py-3 rounded-xl bg-[#0B1D3A] text-white text-sm font-semibold hover:bg-[#132B52] disabled:opacity-60 transition-colors"
           >
             {loadingPassword ? 'Validando acesso...' : 'Desbloquear Painel'}
+          </button>
+
+          <button
+            type="button"
+            onClick={handleTestModeEnter}
+            className="w-full min-h-[46px] px-5 py-2.5 rounded-xl border border-[#B8934A] bg-[#F7F1E3]/60 text-[#0B1D3A] text-sm font-semibold hover:bg-[#F7F1E3] transition-colors"
+          >
+            Entrar sem senha (Modo Teste)
           </button>
         </form>
 

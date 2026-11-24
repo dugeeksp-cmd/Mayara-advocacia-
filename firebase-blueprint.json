@@ -32,66 +32,147 @@
       },
       "required": ["uid", "email", "displayName", "createdAt"]
     },
-    "LetterheadSettings": {
-      "title": "LetterheadSettings",
-      "description": "Office institutional letterhead and footer configuration.",
+    "HeaderProfile": {
+      "title": "HeaderProfile",
+      "description": "Named institutional header profile with typography, color, size, and alignment.",
       "type": "object",
       "properties": {
-        "officeTitle": {
+        "id": {
           "type": "string",
           "minLength": 2,
-          "maxLength": 160
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
         },
-        "oabNumber": {
+        "name": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "officeTitle": { "type": "string", "minLength": 2, "maxLength": 160 },
+        "oabNumber": { "type": "string", "minLength": 2, "maxLength": 60 },
+        "subtitle": { "type": "string", "maxLength": 160 },
+        "alignment": { "type": "string", "enum": ["left", "center", "right"] },
+        "fontFamily": {
+          "type": "string",
+          "enum": ["playfair", "inter", "times", "georgia", "montserrat", "lora"]
+        },
+        "textSize": { "type": "string", "enum": ["small", "medium", "large"] },
+        "textColor": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+        "isDefault": { "type": "boolean" },
+        "officeId": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "updatedBy": { "type": "string", "maxLength": 128 }
+      },
+      "required": [
+        "id",
+        "name",
+        "officeTitle",
+        "oabNumber",
+        "alignment",
+        "fontFamily",
+        "textSize",
+        "textColor",
+        "isDefault",
+        "officeId",
+        "createdAt",
+        "updatedAt",
+        "updatedBy"
+      ]
+    },
+    "FooterProfile": {
+      "title": "FooterProfile",
+      "description": "Named institutional PDF footer profile with typography, color, size, and alignment.",
+      "type": "object",
+      "properties": {
+        "id": {
           "type": "string",
           "minLength": 2,
-          "maxLength": 60
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
         },
-        "subtitle": {
+        "name": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "addressFooter": { "type": "string", "minLength": 5, "maxLength": 300 },
+        "phone": { "type": "string", "minLength": 4, "maxLength": 40 },
+        "email": { "type": "string", "minLength": 3, "maxLength": 120 },
+        "instagram": { "type": "string", "maxLength": 80 },
+        "website": { "type": "string", "maxLength": 160 },
+        "alignment": { "type": "string", "enum": ["left", "center", "right"] },
+        "fontFamily": {
           "type": "string",
-          "maxLength": 160
+          "enum": ["playfair", "inter", "times", "georgia", "montserrat", "lora"]
         },
-        "headerAlignment": {
+        "textSize": { "type": "string", "enum": ["small", "medium", "large"] },
+        "textColor": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+        "isDefault": { "type": "boolean" },
+        "officeId": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "updatedBy": { "type": "string", "maxLength": 128 }
+      },
+      "required": [
+        "id",
+        "name",
+        "addressFooter",
+        "phone",
+        "email",
+        "alignment",
+        "fontFamily",
+        "textSize",
+        "textColor",
+        "isDefault",
+        "officeId",
+        "createdAt",
+        "updatedAt",
+        "updatedBy"
+      ]
+    },
+    "LogoAsset": {
+      "title": "LogoAsset",
+      "description": "Named institutional logo or seal image stored for document letterheads.",
+      "type": "object",
+      "properties": {
+        "id": {
           "type": "string",
-          "enum": ["left", "center", "right"]
+          "minLength": 2,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
         },
-        "addressFooter": {
-          "type": "string",
-          "minLength": 5,
-          "maxLength": 300
-        },
-        "phone": {
-          "type": "string",
-          "maxLength": 40
-        },
-        "email": {
-          "type": "string",
-          "maxLength": 120
-        },
-        "instagram": {
-          "type": "string",
-          "maxLength": 80
-        },
-        "website": {
-          "type": "string",
-          "maxLength": 160
-        },
-        "logoDataUrl": {
-          "type": "string",
-          "maxLength": 350000
-        },
-        "sealDataUrl": {
-          "type": "string",
-          "maxLength": 350000
-        },
-        "updatedAt": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "updatedBy": {
-          "type": "string",
-          "maxLength": 128
-        }
+        "name": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "formatLabel": { "type": "string", "maxLength": 40 },
+        "dataUrl": { "type": "string", "minLength": 20, "maxLength": 350000 },
+        "isDefault": { "type": "boolean" },
+        "officeId": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "updatedBy": { "type": "string", "maxLength": 128 }
+      },
+      "required": [
+        "id",
+        "name",
+        "dataUrl",
+        "isDefault",
+        "officeId",
+        "createdAt",
+        "updatedAt",
+        "updatedBy"
+      ]
+    },
+    "LetterheadSettings": {
+      "title": "LetterheadSettings",
+      "description": "Office institutional letterhead and footer fallback configuration.",
+      "type": "object",
+      "properties": {
+        "officeTitle": { "type": "string", "minLength": 2, "maxLength": 160 },
+        "oabNumber": { "type": "string", "minLength": 2, "maxLength": 60 },
+        "subtitle": { "type": "string", "maxLength": 160 },
+        "headerAlignment": { "type": "string", "enum": ["left", "center", "right"] },
+        "addressFooter": { "type": "string", "minLength": 5, "maxLength": 300 },
+        "phone": { "type": "string", "maxLength": 40 },
+        "email": { "type": "string", "maxLength": 120 },
+        "instagram": { "type": "string", "maxLength": 80 },
+        "website": { "type": "string", "maxLength": 160 },
+        "logoDataUrl": { "type": "string", "maxLength": 350000 },
+        "sealDataUrl": { "type": "string", "maxLength": 350000 },
+        "officeId": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "updatedBy": { "type": "string", "maxLength": 128 }
       },
       "required": [
         "officeTitle",
@@ -108,27 +189,13 @@
       "description": "Integrated electronic signature provider settings (Clicksign / DocuSign / Gov.br).",
       "type": "object",
       "properties": {
-        "defaultProvider": {
-          "type": "string",
-          "enum": ["clicksign", "docusign"]
-        },
-        "clicksignEnabled": {
-          "type": "boolean"
-        },
-        "docusignEnabled": {
-          "type": "boolean"
-        },
-        "govbrEnabled": {
-          "type": "boolean"
-        },
-        "updatedAt": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "updatedBy": {
-          "type": "string",
-          "maxLength": 128
-        }
+        "defaultProvider": { "type": "string", "enum": ["clicksign", "docusign"] },
+        "clicksignEnabled": { "type": "boolean" },
+        "docusignEnabled": { "type": "boolean" },
+        "govbrEnabled": { "type": "boolean" },
+        "officeId": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "updatedBy": { "type": "string", "maxLength": 128 }
       },
       "required": [
         "defaultProvider",
@@ -141,7 +208,7 @@
     },
     "DocumentTemplate": {
       "title": "DocumentTemplate",
-      "description": "Reusable legal document template with dynamic placeholder tags.",
+      "description": "Reusable legal document template with dynamic tags and per-template header/footer/logo links.",
       "type": "object",
       "properties": {
         "id": {
@@ -150,40 +217,18 @@
           "maxLength": 128,
           "pattern": "^[a-zA-Z0-9_\\-]+$"
         },
-        "title": {
-          "type": "string",
-          "minLength": 2,
-          "maxLength": 140
-        },
-        "category": {
-          "type": "string",
-          "minLength": 2,
-          "maxLength": 80
-        },
-        "content": {
-          "type": "string",
-          "minLength": 10,
-          "maxLength": 30000
-        },
-        "isDefault": {
-          "type": "boolean"
-        },
-        "customFields": {
-          "type": "array"
-        },
-        "ownerUid": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 128
-        },
-        "createdAt": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "updatedAt": {
-          "type": "string",
-          "format": "date-time"
-        }
+        "title": { "type": "string", "minLength": 2, "maxLength": 140 },
+        "category": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "content": { "type": "string", "minLength": 10, "maxLength": 30000 },
+        "isDefault": { "type": "boolean" },
+        "customFields": { "type": "array" },
+        "headerId": { "type": "string", "maxLength": 128 },
+        "footerId": { "type": "string", "maxLength": 128 },
+        "logoId": { "type": "string", "maxLength": 128 },
+        "officeId": { "type": "string", "maxLength": 64 },
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": [
         "id",
@@ -196,9 +241,57 @@
         "updatedAt"
       ]
     },
+    "ClientRecord": {
+      "title": "ClientRecord",
+      "description": "Manually registered office client cadastral record managed by the lawyer.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "fullName": { "type": "string", "minLength": 2, "maxLength": 140 },
+        "cpf": { "type": "string", "maxLength": 25 },
+        "rg": { "type": "string", "maxLength": 30 },
+        "email": { "type": "string", "maxLength": 160 },
+        "whatsapp": { "type": "string", "minLength": 4, "maxLength": 30 },
+        "address": { "type": "string", "maxLength": 350 },
+        "nationality": { "type": "string", "maxLength": 80 },
+        "maritalStatus": { "type": "string", "maxLength": 60 },
+        "profession": { "type": "string", "maxLength": 100 },
+        "officeId": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "updatedBy": { "type": "string", "maxLength": 128 }
+      },
+      "required": [
+        "id",
+        "fullName",
+        "whatsapp",
+        "officeId",
+        "createdAt",
+        "updatedAt",
+        "updatedBy"
+      ]
+    },
+    "ChangelogChecklistState": {
+      "title": "ChangelogChecklistState",
+      "description": "Interactive release verification checklist state.",
+      "type": "object",
+      "properties": {
+        "version": { "type": "string", "minLength": 2, "maxLength": 40 },
+        "checkedIds": { "type": "array" },
+        "officeId": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "updatedBy": { "type": "string", "maxLength": 128 }
+      },
+      "required": ["version", "checkedIds", "updatedAt", "updatedBy"]
+    },
     "ServiceLink": {
       "title": "ServiceLink",
-      "description": "Temporary client service link metadata (Zero-Retention LGPD: never stores CPF, RG, address, or personal answers).",
+      "description": "Client service link metadata (Zero-Retention LGPD on client portal).",
       "type": "object",
       "properties": {
         "tokenId": {
@@ -207,16 +300,9 @@
           "maxLength": 64,
           "pattern": "^[a-zA-Z0-9_\\-]+$"
         },
-        "clientName": {
-          "type": "string",
-          "minLength": 2,
-          "maxLength": 120
-        },
-        "whatsapp": {
-          "type": "string",
-          "minLength": 8,
-          "maxLength": 25
-        },
+        "clientId": { "type": "string", "maxLength": 128 },
+        "clientName": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "whatsapp": { "type": "string", "minLength": 8, "maxLength": 25 },
         "pin": {
           "type": "string",
           "minLength": 4,
@@ -229,52 +315,21 @@
           "maxLength": 128,
           "pattern": "^[a-zA-Z0-9_\\-]+$"
         },
-        "templateTitle": {
-          "type": "string",
-          "minLength": 2,
-          "maxLength": 140
-        },
-        "status": {
-          "type": "string",
-          "enum": ["pendente", "assinando", "concluido"]
-        },
+        "templateTitle": { "type": "string", "minLength": 2, "maxLength": 140 },
+        "status": { "type": "string", "enum": ["pendente", "assinando", "concluido"] },
         "signatureMethod": {
           "type": "string",
           "enum": ["none", "govbr", "clicksign", "docusign"]
         },
-        "signatureEnvelopeId": {
-          "type": "string",
-          "maxLength": 128
-        },
-        "signatureAuditHash": {
-          "type": "string",
-          "maxLength": 128
-        },
-        "signedPdfUrl": {
-          "type": "string",
-          "maxLength": 2000
-        },
-        "signedPdfStoragePath": {
-          "type": "string",
-          "maxLength": 300
-        },
-        "signedPdfName": {
-          "type": "string",
-          "maxLength": 200
-        },
-        "ownerUid": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 128
-        },
-        "createdAt": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "completedAt": {
-          "type": "string",
-          "format": "date-time"
-        }
+        "signatureEnvelopeId": { "type": "string", "maxLength": 128 },
+        "signatureAuditHash": { "type": "string", "maxLength": 128 },
+        "signedPdfUrl": { "type": "string", "maxLength": 2000 },
+        "signedPdfStoragePath": { "type": "string", "maxLength": 300 },
+        "signedPdfName": { "type": "string", "maxLength": 200 },
+        "officeId": { "type": "string", "maxLength": 64 },
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "completedAt": { "type": "string", "format": "date-time" }
       },
       "required": [
         "tokenId",
@@ -295,17 +350,37 @@
       "schema": { "$ref": "#/entities/AdminUser" },
       "description": "Authorized office administrator documents."
     },
+    "/clients/{clientId}": {
+      "schema": { "$ref": "#/entities/ClientRecord" },
+      "description": "Lawyer-registered client cadastral profiles."
+    },
+    "/headers/{headerId}": {
+      "schema": { "$ref": "#/entities/HeaderProfile" },
+      "description": "Named institutional PDF header profiles."
+    },
+    "/footers/{footerId}": {
+      "schema": { "$ref": "#/entities/FooterProfile" },
+      "description": "Named institutional PDF footer profiles."
+    },
+    "/logos/{logoId}": {
+      "schema": { "$ref": "#/entities/LogoAsset" },
+      "description": "Named logo and seal images for letterheads."
+    },
     "/settings/{settingId}": {
       "schema": { "$ref": "#/entities/LetterheadSettings" },
-      "description": "Global office configuration documents (letterhead and signatureConfig)."
+      "description": "Global office configuration documents (letterhead, signatureConfig, and changelogProgress)."
     },
     "/templates/{templateId}": {
       "schema": { "$ref": "#/entities/DocumentTemplate" },
       "description": "Legal document templates managed by the office."
     },
+    "/atendimentos/{tokenId}": {
+      "schema": { "$ref": "#/entities/ServiceLink" },
+      "description": "Real-time client service links with PIN and signed PDF metadata."
+    },
     "/serviceLinks/{tokenId}": {
       "schema": { "$ref": "#/entities/ServiceLink" },
-      "description": "One-time client service links with PIN and signed PDF metadata."
+      "description": "Legacy service links collection kept for backward compatibility."
     }
   }
 }

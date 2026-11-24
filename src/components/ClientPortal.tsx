@@ -1,14 +1,23 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, CheckCircle2, LockKeyhole, ShieldAlert } from 'lucide-react';
 import type {
   DocumentTemplate,
+  FooterProfile,
+  HeaderProfile,
   LetterheadSettings,
+  LogoAsset,
   ServiceLink,
   SignatureConfigSettings,
   SignatureProvider,
 } from '../types/legal';
-import { dataService } from '../services/dataService';
+import { dataService, DEMO_SERVICE_LINK } from '../services/dataService';
 import { DEFAULT_SIGNATURE_CONFIG, DEFAULT_TEMPLATES } from '../utils/templateEngine';
+import {
+  DEFAULT_FOOTERS,
+  DEFAULT_HEADERS,
+  DEFAULT_LOGOS,
+  resolveTemplateTimbrado,
+} from '../utils/timbradoTheme';
 import type { GeneratedPdfArtifact } from '../utils/pdfGenerator';
 import { ClientLayerForm } from './ClientLayerForm';
 import { ClientLayerSignature } from './ClientLayerSignature';
@@ -26,6 +35,9 @@ export function ClientPortal({ initialToken, letterhead, onBackHome }: ClientPor
   const [loading, setLoading] = useState(Boolean(initialToken));
   const [link, setLink] = useState<ServiceLink | null>(null);
   const [template, setTemplate] = useState<DocumentTemplate | null>(null);
+  const [headers, setHeaders] = useState<HeaderProfile[]>(DEFAULT_HEADERS);
+  const [footers, setFooters] = useState<FooterProfile[]>(DEFAULT_FOOTERS);
+  const [logos, setLogos] = useState<LogoAsset[]>(DEFAULT_LOGOS);
   const [signatureConfig, setSignatureConfig] =
     useState<SignatureConfigSettings>(DEFAULT_SIGNATURE_CONFIG);
   const [pinVerified, setPinVerified] = useState(false);
@@ -64,6 +76,17 @@ export function ClientPortal({ initialToken, letterhead, onBackHome }: ClientPor
     void loadToken(initialToken);
   }, [initialToken]);
 
+  async function loadTimbradoAssets() {
+    const [hdrs, ftrs, lgs] = await Promise.all([
+      dataService.getHeaders(),
+      dataService.getFooters(),
+      dataService.getLogos(),
+    ]);
+    setHeaders(hdrs);
+    setFooters(ftrs);
+    setLogos(lgs);
+  }
+
   async function loadToken(token: string) {
     const clean = token.trim();
     if (!clean) {
@@ -86,12 +109,60 @@ export function ClientPortal({ initialToken, letterhead, onBackHome }: ClientPor
         const [tpl, sigCfg] = await Promise.all([
           dataService.getTemplateById(found.templateId),
           dataService.getSignatureConfig(),
+          loadTimbradoAssets(),
         ]);
         setTemplate(tpl || DEFAULT_TEMPLATES[0]);
         setSignatureConfig(sigCfg);
       }
     } catch {
       setGateError('Não foi possível validar este link agora. Tente novamente em instantes.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleTestModeEnter() {
+    setLoading(true);
+    setGateError(null);
+    try {
+      await dataService.ensureSeedData();
+      const [demoFound, templatesList, sigCfg] = await Promise.all([
+        dataService.getLinkByToken(DEMO_SERVICE_LINK.tokenId),
+        dataService.getTemplates(),
+        dataService.getSignatureConfig(),
+        loadTimbradoAssets(),
+      ]);
+
+      const activeDemo: ServiceLink =
+        demoFound && demoFound.status !== 'concluido'
+          ? demoFound
+          : {
+              ...DEMO_SERVICE_LINK,
+              status: 'pendente',
+              signatureMethod: 'none',
+            };
+
+      const preferredTemplate =
+        templatesList.find((t) => t.id === activeDemo.templateId) ||
+        templatesList.find((t) => t.isDefault) ||
+        templatesList[0] ||
+        DEFAULT_TEMPLATES[0];
+
+      setLink({
+        ...activeDemo,
+        templateId: preferredTemplate.id,
+        templateTitle: preferredTemplate.title,
+      });
+      setTemplate(preferredTemplate);
+      setSignatureConfig(sigCfg);
+      setPinVerified(true);
+      setActiveLayer(1);
+    } catch {
+      setLink(DEMO_SERVICE_LINK);
+      setTemplate(DEFAULT_TEMPLATES[0]);
+      setSignatureConfig(DEFAULT_SIGNATURE_CONFIG);
+      setPinVerified(true);
+      setActiveLayer(1);
     } finally {
       setLoading(false);
     }
@@ -114,6 +185,18 @@ export function ClientPortal({ initialToken, letterhead, onBackHome }: ClientPor
     setPinVerified(true);
     setActiveLayer(1);
   }
+
+  const resolvedTimbrado = useMemo(
+    () =>
+      resolveTemplateTimbrado({
+        template,
+        headers,
+        footers,
+        logos,
+        fallbackLetterhead: letterhead,
+      }),
+    [template, headers, footers, logos, letterhead]
+  );
 
   // Final Success Screen
   if (completedSummary) {
@@ -266,6 +349,14 @@ export function ClientPortal({ initialToken, letterhead, onBackHome }: ClientPor
                 {link ? 'Validar PIN e Iniciar' : 'Localizar Atendimento'}
               </button>
 
+              <button
+                type="button"
+                onClick={() => void handleTestModeEnter()}
+                className="w-full min-h-[46px] px-5 py-2.5 rounded-xl border border-[#B8934A] bg-[#F7F1E3]/60 text-[#0B1D3A] text-sm font-semibold hover:bg-[#F7F1E3] transition-colors"
+              >
+                Entrar sem senha (Modo Teste)
+              </button>
+
               {link && (
                 <button
                   type="button"
@@ -291,7 +382,8 @@ export function ClientPortal({ initialToken, letterhead, onBackHome }: ClientPor
     <main className="max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
       <div className="mb-6">
         <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#9A7835] mb-1">
-          {letterhead.officeTitle} · {letterhead.oabNumber}
+          {(resolvedTimbrado.header?.officeTitle || letterhead.officeTitle)} ·{' '}
+          {(resolvedTimbrado.header?.oabNumber || letterhead.oabNumber)}
         </p>
         <h1 className="font-display text-2xl sm:text-3xl font-bold text-[#0B1D3A]">
           {template.title}
@@ -309,6 +401,9 @@ export function ClientPortal({ initialToken, letterhead, onBackHome }: ClientPor
           onToggle={() => setActiveLayer(activeLayer === 1 ? 2 : 1)}
           template={template}
           letterhead={letterhead}
+          header={resolvedTimbrado.header}
+          footer={resolvedTimbrado.footer}
+          logo={resolvedTimbrado.logo}
           defaultClientName={link.clientName}
           onPdfGenerated={(result) => {
             setTransientPdf(result);
@@ -327,6 +422,9 @@ export function ClientPortal({ initialToken, letterhead, onBackHome }: ClientPor
           }}
           link={link}
           letterhead={letterhead}
+          header={resolvedTimbrado.header}
+          footer={resolvedTimbrado.footer}
+          logo={resolvedTimbrado.logo}
           signatureConfig={signatureConfig}
           generatedArtifact={transientPdf?.artifact || null}
           renderedText={transientPdf?.renderedText || ''}
@@ -340,7 +438,10 @@ export function ClientPortal({ initialToken, letterhead, onBackHome }: ClientPor
             setTransientPdf(null);
             setCompletedSummary({
               fileName,
-              methodLabel: method === 'clicksign' ? 'Clicksign (Assinatura Eletrônica)' : 'DocuSign (Assinatura Eletrônica)',
+              methodLabel:
+                method === 'clicksign'
+                  ? 'Clicksign (Assinatura Eletrônica)'
+                  : 'DocuSign (Assinatura Eletrônica)',
             });
           }}
         />

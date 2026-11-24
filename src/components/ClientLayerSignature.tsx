@@ -10,7 +10,10 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import type {
+  FooterProfile,
+  HeaderProfile,
   LetterheadSettings,
+  LogoAsset,
   ServiceLink,
   SignatureConfigSettings,
   SignatureEnvelope,
@@ -35,6 +38,9 @@ interface ClientLayerSignatureProps {
   onToggle: () => void;
   link: ServiceLink;
   letterhead: LetterheadSettings;
+  header?: HeaderProfile | null;
+  footer?: FooterProfile | null;
+  logo?: LogoAsset | null;
   signatureConfig: SignatureConfigSettings;
   generatedArtifact: GeneratedPdfArtifact | null;
   renderedText: string;
@@ -50,6 +56,9 @@ export function ClientLayerSignature({
   onToggle,
   link,
   letterhead,
+  header,
+  footer,
+  logo,
   signatureConfig,
   generatedArtifact,
   renderedText,
@@ -200,6 +209,9 @@ export function ClientLayerSignature({
         documentTitle: link.templateTitle,
         renderedText,
         letterhead,
+        header,
+        footer,
+        logo,
         clientName: signerDisplayName || link.clientName,
         provider: signedEnv.provider,
         envelopeId: signedEnv.envelopeId,

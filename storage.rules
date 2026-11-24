@@ -15,8 +15,16 @@ service firebase.storage {
           request.auth.token.email == 'eduh.asl@gmail.com';
       }
 
-      function linkDoc() {
-        return firestore.get(/databases/(ai-studio-a1d6358c-aced-44f2-8e00-de277e688d42)/documents/serviceLinks/$(tokenId));
+      function atendimentoExists() {
+        return firestore.exists(/databases/(ai-studio-a1d6358c-aced-44f2-8e00-de277e688d42)/documents/atendimentos/$(tokenId));
+      }
+
+      function atendimentoNotDone() {
+        return firestore.get(/databases/(ai-studio-a1d6358c-aced-44f2-8e00-de277e688d42)/documents/atendimentos/$(tokenId)).data.status != 'concluido';
+      }
+
+      function legacyLinkNotDone() {
+        return firestore.get(/databases/(ai-studio-a1d6358c-aced-44f2-8e00-de277e688d42)/documents/serviceLinks/$(tokenId)).data.status != 'concluido';
       }
 
       // Only the admin or someone presenting the exact tokenId may read/download the signed PDF
@@ -31,7 +39,7 @@ service firebase.storage {
         request.resource.size > 0 &&
         request.resource.size <= 10 * 1024 * 1024 &&
         request.resource.contentType == 'application/pdf' &&
-        linkDoc().data.status != 'concluido';
+        (atendimentoExists() ? atendimentoNotDone() : legacyLinkNotDone());
 
       // Only admin can overwrite or delete archived PDFs
       allow update, delete: if isAdminUser();

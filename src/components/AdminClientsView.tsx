@@ -1,36 +1,149 @@
 import { useMemo, useState } from 'react';
 import {
   CheckCircle2,
+  ChevronRight,
   Clock,
   Copy,
   FileSignature,
   Search,
+  User,
+  UserPlus,
   Users,
 } from 'lucide-react';
-import type { ServiceLink, ServiceLinkStatus } from '../types/legal';
+import type {
+  ClientRecord,
+  DocumentTemplate,
+  FooterProfile,
+  HeaderProfile,
+  LetterheadSettings,
+  LogoAsset,
+  ServiceLink,
+  ServiceLinkStatus,
+} from '../types/legal';
+import type { SaveClientInput } from '../services/dataService';
 import { formatDateTimeBR } from '../utils/masksAndFormatters';
+import { matchLinksForClient } from '../utils/legalFieldOptions';
+import { AdminClientManualModal } from './AdminClientManualModal';
+import {
+  AdminClientSummaryModal,
+  type UnifiedClientEntry,
+} from './AdminClientSummaryModal';
 
 interface AdminClientsViewProps {
+  clients: ClientRecord[];
   links: ServiceLink[];
+  templates: DocumentTemplate[];
+  headers: HeaderProfile[];
+  footers: FooterProfile[];
+  logos: LogoAsset[];
+  letterhead: LetterheadSettings;
+  onSaveClient: (input: SaveClientInput) => Promise<ClientRecord>;
+  onCreateAtendimentoForClient: (input: {
+    clientId: string;
+    clientName: string;
+    whatsapp: string;
+    templateId: string;
+    templateTitle: string;
+  }) => Promise<void>;
 }
 
-export function AdminClientsView({ links }: AdminClientsViewProps) {
+function resolveOverallStatus(
+  linkedDocs: ServiceLink[],
+  hasClientRecord: boolean
+): ServiceLinkStatus | 'cadastrado' {
+  if (linkedDocs.length === 0) return hasClientRecord ? 'cadastrado' : 'pendente';
+  if (linkedDocs.some((d) => d.status === 'assinando')) return 'assinando';
+  if (linkedDocs.some((d) => d.status === 'pendente')) return 'pendente';
+  return 'concluido';
+}
+
+export function AdminClientsView({
+  clients,
+  links,
+  templates,
+  headers,
+  footers,
+  logos,
+  letterhead,
+  onSaveClient,
+  onCreateAtendimentoForClient,
+}: AdminClientsViewProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | ServiceLinkStatus>('all');
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<string | null>(null);
+
+  // Modals
+  const [summaryKey, setSummaryKey] = useState<string | null>(null);
+  const [manualModalOpen, setManualModalOpen] = useState(false);
+  const [editingClient, setEditingClient] = useState<ClientRecord | null>(null);
+  const [prefillName, setPrefillName] = useState('');
+  const [prefillWhatsapp, setPrefillWhatsapp] = useState('');
+
+  const unifiedEntries = useMemo<UnifiedClientEntry[]>(() => {
+    const consumedTokens = new Set<string>();
+    const entries: UnifiedClientEntry[] = [];
+
+    for (const client of clients) {
+      const matched = matchLinksForClient(client, links);
+      matched.forEach((m) => consumedTokens.add(m.tokenId));
+      entries.push({
+        key: `client:${client.id}`,
+        clientRecord: client,
+        displayName: client.fullName,
+        whatsapp: client.whatsapp,
+        cpf: client.cpf,
+        createdAt: client.createdAt,
+        overallStatus: resolveOverallStatus(matched, true),
+        linkedDocs: matched,
+      });
+    }
+
+    // Group remaining link-only atendimentos (created via Link Rápido without manual ClientRecord)
+    const linkOnlyBuckets = new Map<string, ServiceLink[]>();
+    for (const link of links) {
+      if (consumedTokens.has(link.tokenId)) continue;
+      const bucketKey = `${link.clientName.trim().toLowerCase()}|${link.whatsapp.replace(/\D/g, '').slice(-11)}`;
+      const bucket = linkOnlyBuckets.get(bucketKey) || [];
+      bucket.push(link);
+      linkOnlyBuckets.set(bucketKey, bucket);
+    }
+
+    for (const [bucketKey, bucketLinks] of linkOnlyBuckets.entries()) {
+      const latest = bucketLinks[0];
+      entries.push({
+        key: `link:${bucketKey}`,
+        clientRecord: null,
+        displayName: latest.clientName,
+        whatsapp: latest.whatsapp,
+        cpf: '',
+        createdAt: latest.createdAt,
+        overallStatus: resolveOverallStatus(bucketLinks, false),
+        linkedDocs: bucketLinks,
+      });
+    }
+
+    return entries.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }, [clients, links]);
 
   const filteredClients = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
-    return links.filter((link) => {
-      if (statusFilter !== 'all' && link.status !== statusFilter) return false;
+    return unifiedEntries.filter((entry) => {
+      if (statusFilter !== 'all' && entry.overallStatus !== statusFilter) return false;
       if (!q) return true;
       return (
-        link.clientName.toLowerCase().includes(q) ||
-        link.whatsapp.toLowerCase().includes(q) ||
-        link.templateTitle.toLowerCase().includes(q)
+        entry.displayName.toLowerCase().includes(q) ||
+        entry.whatsapp.toLowerCase().includes(q) ||
+        entry.cpf.toLowerCase().includes(q) ||
+        entry.linkedDocs.some((d) => d.templateTitle.toLowerCase().includes(q))
       );
     });
-  }, [links, searchTerm, statusFilter]);
+  }, [unifiedEntries, searchTerm, statusFilter]);
+
+  const selectedSummaryEntry = useMemo(
+    () => unifiedEntries.find((e) => e.key === summaryKey) || null,
+    [unifiedEntries, summaryKey]
+  );
 
   async function handleCopyLink(tokenId: string) {
     const url = `${window.location.origin}/?token=${encodeURIComponent(tokenId)}`;
@@ -43,32 +156,68 @@ export function AdminClientsView({ links }: AdminClientsViewProps) {
     }
   }
 
+  function openNewManualClientModal() {
+    setEditingClient(null);
+    setPrefillName('');
+    setPrefillWhatsapp('');
+    setManualModalOpen(true);
+  }
+
+  function handleEditOrCompleteClient(entry: UnifiedClientEntry) {
+    setSummaryKey(null);
+    setEditingClient(entry.clientRecord);
+    setPrefillName(entry.displayName);
+    setPrefillWhatsapp(entry.whatsapp);
+    setManualModalOpen(true);
+  }
+
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-8">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+    <div className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 space-y-6">
+      {feedback && (
+        <div
+          role="status"
+          className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm font-medium flex items-center gap-2"
+        >
+          <CheckCircle2 className="w-4 h-4 shrink-0" aria-hidden="true" />
+          <span>{feedback}</span>
+        </div>
+      )}
+
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
           <h2 className="font-display text-xl sm:text-2xl font-semibold text-[#0B1D3A]">
             Clientes e Atendimentos
           </h2>
           <p className="text-sm text-slate-600">
-            Lista de clientes vinculados aos links de atendimento (sem retenção de dados sensíveis
-            LGPD).
+            Clique em um cliente para ver o resumo completo e baixar documentos, ou cadastre um novo
+            cliente manualmente.
           </p>
         </div>
 
-        <div className="relative w-full md:w-72">
-          <Search
-            className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"
-            aria-hidden="true"
-          />
-          <input
-            type="search"
-            aria-label="Buscar cliente por nome ou WhatsApp"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Buscar nome ou WhatsApp..."
-            className="w-full min-h-[44px] pl-10 pr-4 py-2 rounded-xl border border-slate-300 text-sm text-[#0F172A] bg-white"
-          />
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+          <div className="relative w-full sm:w-64">
+            <Search
+              className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"
+              aria-hidden="true"
+            />
+            <input
+              type="search"
+              aria-label="Buscar cliente por nome, CPF ou WhatsApp"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Buscar nome, CPF ou WhatsApp..."
+              className="w-full min-h-[48px] pl-10 pr-4 py-2 rounded-xl border border-slate-300 text-sm text-[#0F172A] bg-white"
+            />
+          </div>
+
+          <button
+            type="button"
+            onClick={openNewManualClientModal}
+            className="min-h-[48px] px-5 py-2.5 rounded-xl bg-[#0B1D3A] text-white text-sm font-semibold hover:bg-[#132B52] inline-flex items-center justify-center gap-2 whitespace-nowrap shrink-0 transition-colors"
+          >
+            <UserPlus className="w-4 h-4 text-[#CFAF6E]" aria-hidden="true" />
+            + Cadastrar Cliente
+          </button>
         </div>
       </div>
 
@@ -76,7 +225,7 @@ export function AdminClientsView({ links }: AdminClientsViewProps) {
       <div
         role="tablist"
         aria-label="Filtrar clientes por status"
-        className="inline-flex flex-wrap items-center gap-1 p-1 bg-slate-100 rounded-xl mb-6"
+        className="inline-flex flex-wrap items-center gap-1 p-1 bg-slate-100 rounded-xl"
       >
         {(
           [
@@ -110,7 +259,7 @@ export function AdminClientsView({ links }: AdminClientsViewProps) {
             Nenhum cliente encontrado
           </p>
           <p className="text-sm text-slate-500">
-            Ajuste os filtros de busca ou gere um novo link de atendimento.
+            Ajuste os filtros de busca ou clique em &ldquo;+ Cadastrar Cliente&rdquo;.
           </p>
         </div>
       ) : (
@@ -119,72 +268,138 @@ export function AdminClientsView({ links }: AdminClientsViewProps) {
             <thead>
               <tr className="border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
                 <th className="py-3 pr-4">Cliente</th>
-                <th className="py-3 px-4">WhatsApp / PIN</th>
-                <th className="py-3 px-4">Documento</th>
-                <th className="py-3 px-4">Status do Atendimento</th>
+                <th className="py-3 px-4">WhatsApp / Cadastro</th>
+                <th className="py-3 px-4">Documentos</th>
+                <th className="py-3 px-4">Status</th>
                 <th className="py-3 pl-4 text-right">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 text-sm">
-              {filteredClients.map((client) => (
-                <tr key={client.tokenId} className="hover:bg-slate-50/70">
-                  <td className="py-3.5 pr-4">
-                    <p className="font-semibold text-[#0B1D3A]">{client.clientName}</p>
-                    <p className="text-xs text-slate-500 tabular-nums">
-                      Cadastro em {formatDateTimeBR(client.createdAt)}
-                    </p>
-                  </td>
-                  <td className="py-3.5 px-4 tabular-nums">
-                    <p className="text-slate-800">{client.whatsapp}</p>
-                    <p className="text-xs text-slate-500 font-mono">PIN: {client.pin}</p>
-                  </td>
-                  <td className="py-3.5 px-4 text-slate-700">{client.templateTitle}</td>
-                  <td className="py-3.5 px-4">
-                    {client.status === 'concluido' ? (
-                      <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
-                        <CheckCircle2 className="w-4 h-4 shrink-0" aria-hidden="true" />
-                        Concluído
-                      </span>
-                    ) : client.status === 'assinando' ? (
-                      <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#9A7835]">
-                        <FileSignature className="w-4 h-4 shrink-0" aria-hidden="true" />
-                        Preenchido / Aguardando assinatura
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700">
-                        <Clock className="w-4 h-4 shrink-0" aria-hidden="true" />
-                        Aguardando preenchimento
-                      </span>
-                    )}
-                  </td>
-                  <td className="py-3.5 pl-4 text-right">
-                    {client.status === 'concluido' && client.signedPdfUrl ? (
-                      <a
-                        href={client.signedPdfUrl}
-                        download={client.signedPdfName || `Documento_${client.clientName}.pdf`}
-                        target={client.signedPdfUrl.startsWith('data:') ? undefined : '_blank'}
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center justify-center min-h-[40px] px-3.5 py-1.5 rounded-xl bg-[#0B1D3A] text-white text-xs font-semibold hover:bg-[#132B52] whitespace-nowrap"
-                      >
-                        Baixar PDF
-                      </a>
-                    ) : (
+              {filteredClients.map((entry) => {
+                const latestDoc = entry.linkedDocs[0];
+                return (
+                  <tr
+                    key={entry.key}
+                    onClick={() => setSummaryKey(entry.key)}
+                    className="hover:bg-[#F7F1E3]/30 cursor-pointer transition-colors"
+                  >
+                    <td className="py-3.5 pr-4">
                       <button
                         type="button"
-                        onClick={() => handleCopyLink(client.tokenId)}
-                        className="inline-flex items-center gap-1.5 min-h-[40px] px-3.5 py-1.5 rounded-xl border border-slate-300 bg-white text-xs font-semibold text-[#0B1D3A] hover:bg-slate-50 whitespace-nowrap"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSummaryKey(entry.key);
+                        }}
+                        className="text-left group"
                       >
-                        <Copy className="w-3.5 h-3.5" aria-hidden="true" />
-                        {copiedToken === client.tokenId ? 'Copiado' : 'Copiar Link'}
+                        <p className="font-semibold text-[#0B1D3A] group-hover:text-[#9A7835] inline-flex items-center gap-1 transition-colors">
+                          {entry.displayName}
+                          <ChevronRight className="w-3.5 h-3.5 opacity-60" aria-hidden="true" />
+                        </p>
+                        <p className="text-xs text-slate-500 tabular-nums">
+                          {entry.cpf ? `CPF: ${entry.cpf} · ` : ''}
+                          {formatDateTimeBR(entry.createdAt)}
+                        </p>
                       </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="py-3.5 px-4 tabular-nums">
+                      <p className="text-slate-800">{entry.whatsapp}</p>
+                      <p className="text-xs text-slate-500">
+                        {entry.clientRecord ? 'Ficha completa salva' : latestDoc ? `PIN: ${latestDoc.pin}` : '—'}
+                      </p>
+                    </td>
+                    <td className="py-3.5 px-4 text-slate-700">
+                      <p className="font-medium text-[#0B1D3A]">
+                        {latestDoc ? latestDoc.templateTitle : 'Sem documento vinculado'}
+                      </p>
+                      <p className="text-xs text-slate-500 tabular-nums">
+                        {entry.linkedDocs.length}{' '}
+                        {entry.linkedDocs.length === 1 ? 'documento' : 'documentos'}
+                      </p>
+                    </td>
+                    <td className="py-3.5 px-4">
+                      {entry.overallStatus === 'concluido' ? (
+                        <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
+                          <CheckCircle2 className="w-4 h-4 shrink-0" aria-hidden="true" />
+                          Concluído
+                        </span>
+                      ) : entry.overallStatus === 'assinando' ? (
+                        <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#9A7835]">
+                          <FileSignature className="w-4 h-4 shrink-0" aria-hidden="true" />
+                          Aguardando assinatura
+                        </span>
+                      ) : entry.overallStatus === 'cadastrado' ? (
+                        <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#0B1D3A]">
+                          <User className="w-4 h-4 shrink-0" aria-hidden="true" />
+                          Cadastro ativo
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700">
+                          <Clock className="w-4 h-4 shrink-0" aria-hidden="true" />
+                          Aguardando preenchimento
+                        </span>
+                      )}
+                    </td>
+                    <td
+                      className="py-3.5 pl-4 text-right"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="inline-flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setSummaryKey(entry.key)}
+                          className="inline-flex items-center justify-center min-h-[40px] px-3.5 py-1.5 rounded-xl bg-[#0B1D3A] text-white text-xs font-semibold hover:bg-[#132B52] whitespace-nowrap"
+                        >
+                          Ver Resumo
+                        </button>
+                        {latestDoc && latestDoc.status !== 'concluido' && (
+                          <button
+                            type="button"
+                            onClick={() => void handleCopyLink(latestDoc.tokenId)}
+                            className="inline-flex items-center gap-1.5 min-h-[40px] px-3 py-1.5 rounded-xl border border-slate-300 bg-white text-xs font-semibold text-[#0B1D3A] hover:bg-slate-50 whitespace-nowrap"
+                          >
+                            <Copy className="w-3.5 h-3.5" aria-hidden="true" />
+                            {copiedToken === latestDoc.tokenId ? 'Copiado' : 'Link'}
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       )}
+
+      {/* Client Summary & Document History Modal */}
+      <AdminClientSummaryModal
+        entry={selectedSummaryEntry}
+        templates={templates}
+        headers={headers}
+        footers={footers}
+        logos={logos}
+        letterhead={letterhead}
+        onClose={() => setSummaryKey(null)}
+        onEditOrCompleteClient={handleEditOrCompleteClient}
+      />
+
+      {/* Manual Client Registration / Edit Modal */}
+      <AdminClientManualModal
+        isOpen={manualModalOpen}
+        editingClient={editingClient}
+        prefillName={prefillName}
+        prefillWhatsapp={prefillWhatsapp}
+        templates={templates}
+        headers={headers}
+        footers={footers}
+        logos={logos}
+        letterhead={letterhead}
+        onClose={() => setManualModalOpen(false)}
+        onSaveClient={onSaveClient}
+        onCreateAtendimentoForClient={onCreateAtendimentoForClient}
+        onSuccessFeedback={(msg) => setFeedback(msg)}
+      />
     </div>
   );
 }

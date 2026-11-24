@@ -4,11 +4,69 @@ export type ServiceLinkStatus = 'pendente' | 'assinando' | 'concluido';
 export type HeaderAlignment = 'left' | 'center' | 'right';
 export type CustomFieldType = 'text' | 'number' | 'date' | 'cpf_cnpj' | 'email' | 'phone';
 
+export type TimbradoFontFamily =
+  | 'playfair'
+  | 'inter'
+  | 'times'
+  | 'georgia'
+  | 'montserrat'
+  | 'lora';
+
+export type TimbradoTextSize = 'small' | 'medium' | 'large';
+
 export interface CustomTemplateField {
   key: string;
   tag: string;
   label: string;
   fieldType: CustomFieldType;
+}
+
+export interface HeaderProfile {
+  id: string;
+  name: string;
+  officeTitle: string;
+  oabNumber: string;
+  subtitle?: string;
+  alignment: HeaderAlignment;
+  fontFamily: TimbradoFontFamily;
+  textSize: TimbradoTextSize;
+  textColor: string;
+  isDefault: boolean;
+  officeId?: string;
+  createdAt: string;
+  updatedAt: string;
+  updatedBy: string;
+}
+
+export interface FooterProfile {
+  id: string;
+  name: string;
+  addressFooter: string;
+  phone: string;
+  email: string;
+  instagram?: string;
+  website?: string;
+  alignment: HeaderAlignment;
+  fontFamily: TimbradoFontFamily;
+  textSize: TimbradoTextSize;
+  textColor: string;
+  isDefault: boolean;
+  officeId?: string;
+  createdAt: string;
+  updatedAt: string;
+  updatedBy: string;
+}
+
+export interface LogoAsset {
+  id: string;
+  name: string;
+  formatLabel?: string;
+  dataUrl: string;
+  isDefault: boolean;
+  officeId?: string;
+  createdAt: string;
+  updatedAt: string;
+  updatedBy: string;
 }
 
 export interface LetterheadSettings {
@@ -23,6 +81,7 @@ export interface LetterheadSettings {
   website?: string;
   logoDataUrl?: string | null;
   sealDataUrl?: string | null;
+  officeId?: string;
   updatedAt: string;
   updatedBy: string;
 }
@@ -32,6 +91,7 @@ export interface SignatureConfigSettings {
   clicksignEnabled: boolean;
   docusignEnabled: boolean;
   govbrEnabled: boolean;
+  officeId?: string;
   updatedAt: string;
   updatedBy: string;
 }
@@ -43,13 +103,43 @@ export interface DocumentTemplate {
   content: string;
   isDefault: boolean;
   customFields?: CustomTemplateField[];
+  headerId?: string | null;
+  footerId?: string | null;
+  logoId?: string | null;
+  officeId?: string;
   ownerUid: string;
   createdAt: string;
   updatedAt: string;
 }
 
+export interface ClientRecord {
+  id: string;
+  fullName: string;
+  cpf: string;
+  rg: string;
+  email: string;
+  whatsapp: string;
+  address: string;
+  nationality: string;
+  maritalStatus: string;
+  profession: string;
+  officeId?: string;
+  createdAt: string;
+  updatedAt: string;
+  updatedBy: string;
+}
+
+export interface ChangelogChecklistState {
+  version: string;
+  checkedIds: string[];
+  officeId?: string;
+  updatedAt: string;
+  updatedBy: string;
+}
+
 export interface ServiceLink {
   tokenId: string;
+  clientId?: string | null;
   clientName: string;
   whatsapp: string;
   pin: string;
@@ -62,6 +152,7 @@ export interface ServiceLink {
   signedPdfUrl?: string | null;
   signedPdfStoragePath?: string | null;
   signedPdfName?: string | null;
+  officeId?: string;
   ownerUid: string;
   createdAt: string;
   completedAt?: string | null;

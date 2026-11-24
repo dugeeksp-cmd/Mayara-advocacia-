@@ -1,6 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import { CheckCircle2, ChevronDown, Download, MapPin, ShieldCheck } from 'lucide-react';
-import type { DocumentTemplate, LetterheadSettings } from '../types/legal';
+import type {
+  DocumentTemplate,
+  FooterProfile,
+  HeaderProfile,
+  LetterheadSettings,
+  LogoAsset,
+} from '../types/legal';
 import {
   formatCEP,
   formatCPF,
@@ -17,6 +23,11 @@ import {
   triggerBlobDownload,
   type GeneratedPdfArtifact,
 } from '../utils/pdfGenerator';
+import {
+  MaritalStatusSelectField,
+  NationalitySelectField,
+  ProfessionComboboxField,
+} from './SmartLegalFields';
 
 interface ClientLayerFormProps {
   isOpen: boolean;
@@ -24,6 +35,9 @@ interface ClientLayerFormProps {
   onToggle: () => void;
   template: DocumentTemplate;
   letterhead: LetterheadSettings;
+  header?: HeaderProfile | null;
+  footer?: FooterProfile | null;
+  logo?: LogoAsset | null;
   defaultClientName: string;
   onPdfGenerated: (result: {
     artifact: GeneratedPdfArtifact;
@@ -38,6 +52,9 @@ export function ClientLayerForm({
   onToggle,
   template,
   letterhead,
+  header,
+  footer,
+  logo,
   defaultClientName,
   onPdfGenerated,
 }: ClientLayerFormProps) {
@@ -157,6 +174,9 @@ export function ClientLayerForm({
         documentTitle: template.title,
         renderedText,
         letterhead,
+        header,
+        footer,
+        logo,
         clientName: signerDisplayName,
       });
 
@@ -304,6 +324,51 @@ export function ClientLayerForm({
                         required
                       />
                     </div>
+                  </div>
+                );
+              }
+
+              if (field.key === 'NACIONALIDADE') {
+                return (
+                  <div key={field.rawToken}>
+                    <NationalitySelectField
+                      id={`field-${field.key}`}
+                      label={field.label}
+                      value={values[field.rawToken] || ''}
+                      onChange={(nextVal) =>
+                        setValues((prev) => ({ ...prev, [field.rawToken]: nextVal }))
+                      }
+                    />
+                  </div>
+                );
+              }
+
+              if (field.key === 'ESTADO_CIVIL') {
+                return (
+                  <div key={field.rawToken}>
+                    <MaritalStatusSelectField
+                      id={`field-${field.key}`}
+                      label={field.label}
+                      value={values[field.rawToken] || ''}
+                      onChange={(nextVal) =>
+                        setValues((prev) => ({ ...prev, [field.rawToken]: nextVal }))
+                      }
+                    />
+                  </div>
+                );
+              }
+
+              if (field.key === 'PROFISSAO') {
+                return (
+                  <div key={field.rawToken}>
+                    <ProfessionComboboxField
+                      id={`field-${field.key}`}
+                      label={field.label}
+                      value={values[field.rawToken] || ''}
+                      onChange={(nextVal) =>
+                        setValues((prev) => ({ ...prev, [field.rawToken]: nextVal }))
+                      }
+                    />
                   </div>
                 );
               }

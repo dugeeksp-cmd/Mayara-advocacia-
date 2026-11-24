@@ -1,14 +1,28 @@
 import { useEffect, useState } from 'react';
 import { Menu } from 'lucide-react';
 import type {
+  ClientRecord,
   DocumentTemplate,
+  FooterProfile,
+  HeaderProfile,
   LetterheadSettings,
+  LogoAsset,
   ServiceLink,
   SignatureConfigSettings,
   SignatureServerConfig,
 } from '../types/legal';
-import { dataService } from '../services/dataService';
+import {
+  dataService,
+  subscribeToSyncState,
+  type CloudSyncState,
+} from '../services/dataService';
 import { fetchSignatureServerConfig } from '../services/signatureApi';
+import {
+  DEFAULT_FOOTERS,
+  DEFAULT_HEADERS,
+  DEFAULT_LOGOS,
+  deriveLetterheadFromProfiles,
+} from '../utils/timbradoTheme';
 import { AdminSidebarDrawer, type AdminSection } from './AdminSidebarDrawer';
 import { AdminLinkGenerator } from './AdminLinkGenerator';
 import { AdminLinksManager } from './AdminLinksManager';
@@ -39,7 +53,13 @@ export function AdminDashboard({
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const [links, setLinks] = useState<ServiceLink[]>([]);
+  const [clients, setClients] = useState<ClientRecord[]>([]);
   const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
+  const [headers, setHeaders] = useState<HeaderProfile[]>(DEFAULT_HEADERS);
+  const [footers, setFooters] = useState<FooterProfile[]>(DEFAULT_FOOTERS);
+  const [logos, setLogos] = useState<LogoAsset[]>(DEFAULT_LOGOS);
+  const [syncState, setSyncState] = useState<CloudSyncState>('cloud');
+
   const [signatureConfig, setSignatureConfig] = useState<SignatureConfigSettings | null>(null);
   const [signatureServerConfig, setSignatureServerConfig] = useState<SignatureServerConfig | null>(
     null
@@ -48,37 +68,89 @@ export function AdminDashboard({
 
   useEffect(() => {
     let active = true;
-    let unsubscribe: (() => void) | undefined;
+    const unsubs: Array<() => void> = [];
 
     async function init() {
       setLoading(true);
       await dataService.ensureSeedData();
-      const [tpls, sigCfg, serverCfg] = await Promise.all([
+      const [hdrs, ftrs, lgs, tpls, sigCfg, serverCfg] = await Promise.all([
+        dataService.getHeaders(),
+        dataService.getFooters(),
+        dataService.getLogos(),
         dataService.getTemplates(),
         dataService.getSignatureConfig(),
         fetchSignatureServerConfig().catch(() => null),
       ]);
       if (!active) return;
+
+      setHeaders(hdrs);
+      setFooters(ftrs);
+      setLogos(lgs);
       setTemplates(tpls);
       setSignatureConfig(sigCfg);
       setSignatureServerConfig(serverCfg);
       setLoading(false);
 
-      unsubscribe = dataService.subscribeToLinks((nextLinks) => {
-        if (active) setLinks(nextLinks);
-      });
+      unsubs.push(
+        subscribeToSyncState((state) => {
+          if (active) setSyncState(state);
+        }),
+        dataService.subscribeToLinks((nextLinks) => {
+          if (active) setLinks(nextLinks);
+        }),
+        dataService.subscribeToClients((nextClients) => {
+          if (active) setClients(nextClients);
+        }),
+        dataService.subscribeToTemplates((nextTemplates) => {
+          if (active) setTemplates(nextTemplates);
+        }),
+        dataService.subscribeToHeaders((nextHeaders) => {
+          if (active) setHeaders(nextHeaders);
+        }),
+        dataService.subscribeToFooters((nextFooters) => {
+          if (active) setFooters(nextFooters);
+        }),
+        dataService.subscribeToLogos((nextLogos) => {
+          if (active) setLogos(nextLogos);
+        })
+      );
     }
 
     void init();
 
     return () => {
       active = false;
-      if (unsubscribe) unsubscribe();
+      for (const unsub of unsubs) unsub();
     };
   }, [mode]);
 
+  // Keep global letterhead synced whenever default Header/Footer/Logo changes
+  useEffect(() => {
+    const derived = deriveLetterheadFromProfiles({
+      headers,
+      footers,
+      logos,
+      fallback: letterhead,
+    });
+    if (
+      derived.officeTitle !== letterhead.officeTitle ||
+      derived.oabNumber !== letterhead.oabNumber ||
+      derived.subtitle !== letterhead.subtitle ||
+      derived.headerAlignment !== letterhead.headerAlignment ||
+      derived.addressFooter !== letterhead.addressFooter ||
+      derived.phone !== letterhead.phone ||
+      derived.email !== letterhead.email ||
+      derived.instagram !== letterhead.instagram ||
+      derived.website !== letterhead.website ||
+      derived.logoDataUrl !== letterhead.logoDataUrl
+    ) {
+      onLetterheadUpdated(derived);
+    }
+  }, [headers, footers, logos]);
+
   const pendingCount = links.filter((l) => l.status !== 'concluido').length;
   const completedCount = links.filter((l) => l.status === 'concluido').length;
+  const totalClientsCount = Math.max(clients.length, links.length);
 
   return (
     <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
@@ -86,7 +158,7 @@ export function AdminDashboard({
         isOpen={drawerOpen}
         activeSection={activeSection}
         documentsCount={links.length}
-        clientsCount={links.length}
+        clientsCount={totalClientsCount}
         onClose={() => setDrawerOpen(false)}
         onSelectSection={setActiveSection}
       />
@@ -107,7 +179,10 @@ export function AdminDashboard({
 
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#9A7835] mb-0.5">
-              Painel Administrativo · {mode === 'firebase' ? 'Nuvem Firebase' : 'Sessão Local Segura'}
+              Painel Administrativo ·{' '}
+              {syncState === 'cloud'
+                ? 'Nuvem Firebase · Tempo Real'
+                : 'Cache Local (Offline)'}
             </p>
             <h1 className="font-display text-2xl sm:text-3xl font-bold text-[#0B1D3A]">
               {SECTION_LABELS[activeSection]}
@@ -157,28 +232,37 @@ export function AdminDashboard({
             />
           )}
 
-          {activeSection === 'clients' && <AdminClientsView links={links} />}
+          {activeSection === 'clients' && (
+            <AdminClientsView
+              clients={clients}
+              links={links}
+              templates={templates}
+              headers={headers}
+              footers={footers}
+              logos={logos}
+              letterhead={letterhead}
+              onSaveClient={async (input) => dataService.saveClient(input)}
+              onCreateAtendimentoForClient={async (input) => {
+                await dataService.createServiceLink(input);
+              }}
+            />
+          )}
 
           {activeSection === 'cms' && (
             <AdminCmsEditor
               templates={templates}
+              headers={headers}
+              footers={footers}
+              logos={logos}
               letterhead={letterhead}
-              onSaveTemplate={async (tpl) => {
-                const saved = await dataService.saveTemplate(tpl);
-                setTemplates((prev) => {
-                  const idx = prev.findIndex((item) => item.id === saved.id);
-                  if (idx >= 0) {
-                    const next = [...prev];
-                    next[idx] = saved;
-                    return next;
-                  }
-                  return [...prev, saved];
-                });
-              }}
-              onDeleteTemplate={async (id) => {
-                await dataService.deleteTemplate(id);
-                setTemplates((prev) => prev.filter((t) => t.id !== id));
-              }}
+              onSaveTemplate={async (tpl) => dataService.saveTemplate(tpl)}
+              onDeleteTemplate={async (id) => dataService.deleteTemplate(id)}
+              onSaveHeader={async (input) => dataService.saveHeader(input)}
+              onDeleteHeader={async (id) => dataService.deleteHeader(id)}
+              onSaveFooter={async (input) => dataService.saveFooter(input)}
+              onDeleteFooter={async (id) => dataService.deleteFooter(id)}
+              onSaveLogo={async (input) => dataService.saveLogo(input)}
+              onDeleteLogo={async (id) => dataService.deleteLogo(id)}
               onSaveLetterhead={async (settings) => {
                 const saved = await dataService.saveLetterhead(settings);
                 onLetterheadUpdated(saved);

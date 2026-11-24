@@ -11,7 +11,9 @@ import {
   ShieldCheck,
   X,
 } from 'lucide-react';
-import type { LetterheadSettings } from '../types/legal';
+import type { FooterProfile, HeaderProfile, LogoAsset } from '../types/legal';
+import type { SaveFooterInput, SaveHeaderInput, SaveLogoInput } from '../services/dataService';
+import { sanitizeFilenamePart } from '../utils/masksAndFormatters';
 import {
   extractPdfDocumentClientSide,
   type PdfImportOptions,
@@ -24,18 +26,23 @@ interface PdfTemplateImportModalProps {
   onOpenExtractedTemplate: (data: {
     title: string;
     content: string;
+    headerId?: string | null;
+    footerId?: string | null;
+    logoId?: string | null;
     notice?: string;
   }) => void;
-  onApplyLetterheadUpdates: (
-    updates: Partial<Omit<LetterheadSettings, 'updatedAt' | 'updatedBy'>>
-  ) => Promise<void>;
+  onSaveExtractedHeader: (input: SaveHeaderInput) => Promise<HeaderProfile>;
+  onSaveExtractedFooter: (input: SaveFooterInput) => Promise<FooterProfile>;
+  onSaveExtractedLogo: (input: SaveLogoInput) => Promise<LogoAsset>;
 }
 
 export function PdfTemplateImportModal({
   isOpen,
   onClose,
   onOpenExtractedTemplate,
-  onApplyLetterheadUpdates,
+  onSaveExtractedHeader,
+  onSaveExtractedFooter,
+  onSaveExtractedLogo,
 }: PdfTemplateImportModalProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -53,11 +60,11 @@ export function PdfTemplateImportModal({
   const [applyFooterChecked, setApplyFooterChecked] = useState(true);
   const [applyLogoChecked, setApplyLogoChecked] = useState(true);
   const [applyingLetterhead, setApplyingLetterhead] = useState(false);
-  const [appliedParts, setAppliedParts] = useState<{
-    header: boolean;
-    footer: boolean;
-    logo: boolean;
-  }>({ header: false, footer: false, logo: false });
+  const [savedIds, setSavedIds] = useState<{
+    headerId?: string;
+    footerId?: string;
+    logoId?: string;
+  }>({});
 
   if (!isOpen) return null;
 
@@ -73,7 +80,7 @@ export function PdfTemplateImportModal({
     setProcessing(false);
     setError(null);
     setResult(null);
-    setAppliedParts({ header: false, footer: false, logo: false });
+    setSavedIds({});
     onClose();
   }
 
@@ -87,7 +94,7 @@ export function PdfTemplateImportModal({
     }
     setError(null);
     setResult(null);
-    setAppliedParts({ header: false, footer: false, logo: false });
+    setSavedIds({});
     setSelectedFile(file);
   }
 
@@ -144,10 +151,6 @@ export function PdfTemplateImportModal({
         setApplyFooterChecked(Boolean(extracted.footerData));
         setApplyLogoChecked(Boolean(extracted.logoDataUrl));
         setResult(extracted);
-        onOpenExtractedTemplate({
-          title: extracted.suggestedTitle,
-          content: extracted.bodyText,
-        });
       } else {
         const notice = requestedExtras
           ? 'Texto importado para edição. Nenhum cabeçalho, rodapé ou logotipo foi detectado nas regiões selecionadas.'
@@ -170,56 +173,71 @@ export function PdfTemplateImportModal({
     }
   }
 
-  function buildHeaderPatch(extracted: PdfImportResult): Partial<LetterheadSettings> {
-    if (!extracted.headerData) return {};
-    const patch: Partial<LetterheadSettings> = {};
-    if (extracted.headerData.officeTitle) {
-      patch.officeTitle = extracted.headerData.officeTitle;
-    }
-    if (extracted.headerData.oabNumber) {
-      patch.oabNumber = extracted.headerData.oabNumber;
-    }
-    if (extracted.headerData.subtitle !== undefined) {
-      patch.subtitle = extracted.headerData.subtitle;
-    }
-    return patch;
-  }
+  async function saveExtractedPart(part: 'header' | 'footer' | 'logo', extracted: PdfImportResult) {
+    const slug = sanitizeFilenamePart(extracted.suggestedTitle).toLowerCase().slice(0, 18);
+    const stamp = Date.now().toString(36);
 
-  function buildFooterPatch(extracted: PdfImportResult): Partial<LetterheadSettings> {
-    if (!extracted.footerData) return {};
-    const patch: Partial<LetterheadSettings> = {};
-    if (extracted.footerData.addressFooter) {
-      patch.addressFooter = extracted.footerData.addressFooter;
+    if (part === 'header' && extracted.headerData) {
+      const saved = await onSaveExtractedHeader({
+        id: `header_pdf_${slug}_${stamp}`,
+        name: `Importado · ${extracted.suggestedTitle.slice(0, 28)}`,
+        officeTitle:
+          extracted.headerData.officeTitle ||
+          'MAYARA MARTINS — ADVOCACIA E CONSULTORIA JURÍDICA',
+        oabNumber: extracted.headerData.oabNumber || 'OAB/RJ 229.359',
+        subtitle: extracted.headerData.subtitle || '',
+        alignment: 'center',
+        fontFamily: 'playfair',
+        textSize: 'medium',
+        textColor: '#0B1D3A',
+        isDefault: false,
+      });
+      setSavedIds((prev) => ({ ...prev, headerId: saved.id }));
+      return saved.id;
     }
-    if (extracted.footerData.phone) {
-      patch.phone = extracted.footerData.phone;
+
+    if (part === 'footer' && extracted.footerData) {
+      const saved = await onSaveExtractedFooter({
+        id: `footer_pdf_${slug}_${stamp}`,
+        name: `Importado · ${extracted.suggestedTitle.slice(0, 28)}`,
+        addressFooter:
+          extracted.footerData.addressFooter ||
+          extracted.footerData.rawText ||
+          'Saquarema/RJ',
+        phone: extracted.footerData.phone || '(22) 99805-0980',
+        email: extracted.footerData.email || 'maycmartinsadv@hotmail.com',
+        instagram: extracted.footerData.instagram || '',
+        website: extracted.footerData.website || '',
+        alignment: 'center',
+        fontFamily: 'inter',
+        textSize: 'medium',
+        textColor: '#475569',
+        isDefault: false,
+      });
+      setSavedIds((prev) => ({ ...prev, footerId: saved.id }));
+      return saved.id;
     }
-    if (extracted.footerData.email) {
-      patch.email = extracted.footerData.email;
+
+    if (part === 'logo' && extracted.logoDataUrl) {
+      const saved = await onSaveExtractedLogo({
+        id: `logo_pdf_${slug}_${stamp}`,
+        name: `Logo · ${extracted.suggestedTitle.slice(0, 28)}`,
+        formatLabel: 'Importado de PDF',
+        dataUrl: extracted.logoDataUrl,
+        isDefault: false,
+      });
+      setSavedIds((prev) => ({ ...prev, logoId: saved.id }));
+      return saved.id;
     }
-    if (extracted.footerData.instagram) {
-      patch.instagram = extracted.footerData.instagram;
-    }
-    if (extracted.footerData.website) {
-      patch.website = extracted.footerData.website;
-    }
-    return patch;
+
+    return undefined;
   }
 
   async function handleApplySingle(part: 'header' | 'footer' | 'logo') {
     if (!result) return;
     setApplyingLetterhead(true);
     try {
-      if (part === 'header' && result.headerData) {
-        await onApplyLetterheadUpdates(buildHeaderPatch(result));
-        setAppliedParts((p) => ({ ...p, header: true }));
-      } else if (part === 'footer' && result.footerData) {
-        await onApplyLetterheadUpdates(buildFooterPatch(result));
-        setAppliedParts((p) => ({ ...p, footer: true }));
-      } else if (part === 'logo' && result.logoDataUrl) {
-        await onApplyLetterheadUpdates({ logoDataUrl: result.logoDataUrl });
-        setAppliedParts((p) => ({ ...p, logo: true }));
-      }
+      await saveExtractedPart(part, result);
     } finally {
       setApplyingLetterhead(false);
     }
@@ -229,27 +247,30 @@ export function PdfTemplateImportModal({
     if (!result) return;
     setApplyingLetterhead(true);
     try {
-      const updates: Partial<Omit<LetterheadSettings, 'updatedAt' | 'updatedBy'>> = {};
-      if (applyHeaderChecked && result.headerData) {
-        Object.assign(updates, buildHeaderPatch(result));
+      let headerId = savedIds.headerId;
+      let footerId = savedIds.footerId;
+      let logoId = savedIds.logoId;
+
+      if (applyHeaderChecked && result.headerData && !headerId) {
+        headerId = await saveExtractedPart('header', result);
       }
-      if (applyFooterChecked && result.footerData) {
-        Object.assign(updates, buildFooterPatch(result));
+      if (applyFooterChecked && result.footerData && !footerId) {
+        footerId = await saveExtractedPart('footer', result);
       }
-      if (applyLogoChecked && result.logoDataUrl) {
-        updates.logoDataUrl = result.logoDataUrl;
+      if (applyLogoChecked && result.logoDataUrl && !logoId) {
+        logoId = await saveExtractedPart('logo', result);
       }
 
-      if (Object.keys(updates).length > 0) {
-        await onApplyLetterheadUpdates(updates);
-      }
-
+      const appliedCount = [headerId, footerId, logoId].filter(Boolean).length;
       onOpenExtractedTemplate({
         title: result.suggestedTitle,
         content: result.bodyText,
+        headerId,
+        footerId,
+        logoId,
         notice:
-          Object.keys(updates).length > 0
-            ? 'Modelo importado para o editor e configurações selecionadas aplicadas ao Papel Timbrado.'
+          appliedCount > 0
+            ? 'Modelo importado e perfis extraídos vinculados automaticamente ao timbrado deste documento.'
             : 'Modelo importado para o editor com sucesso.',
       });
       resetAndClose();
@@ -276,7 +297,7 @@ export function PdfTemplateImportModal({
             </h3>
             <p className="text-xs sm:text-sm text-slate-600 mt-1">
               {result
-                ? 'O texto principal já foi carregado no editor. Revise os elementos do timbrado encontrados e aplique com um clique.'
+                ? 'Salve os elementos detectados como novos perfis e vincule-os automaticamente a este modelo.'
                 : 'Envie um documento PDF existente para extrair texto limpo e elementos do papel timbrado diretamente no navegador.'}
             </p>
           </div>
@@ -302,7 +323,6 @@ export function PdfTemplateImportModal({
 
         {!result ? (
           <div className="space-y-5">
-            {/* Dropzone */}
             <label
               htmlFor="pdf-template-file-input"
               onDragOver={(e) => {
@@ -348,7 +368,6 @@ export function PdfTemplateImportModal({
               )}
             </label>
 
-            {/* Extraction Checkboxes */}
             <div className="bg-[#F7F8FA] border border-slate-200 rounded-xl p-4 space-y-3">
               <p className="text-xs font-semibold text-[#0B1D3A]">
                 Selecione o que deseja extrair do PDF:
@@ -470,13 +489,11 @@ export function PdfTemplateImportModal({
             </div>
           </div>
         ) : (
-          /* STEP 2: LETTERHEAD PREVIEW + 1-CLICK APPLY */
           <div className="space-y-4">
             <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs sm:text-sm flex items-center gap-2">
               <Check className="w-4 h-4 shrink-0" aria-hidden="true" />
               <span>
-                Corpo do texto carregado no editor para{' '}
-                <strong>{result.suggestedTitle}</strong> ({result.pageCount}{' '}
+                Documento lido: <strong>{result.suggestedTitle}</strong> ({result.pageCount}{' '}
                 {result.pageCount === 1 ? 'página' : 'páginas'}).
               </span>
             </div>
@@ -497,11 +514,11 @@ export function PdfTemplateImportModal({
                     </label>
                     <button
                       type="button"
-                      disabled={applyingLetterhead || appliedParts.header}
+                      disabled={applyingLetterhead || Boolean(savedIds.headerId)}
                       onClick={() => void handleApplySingle('header')}
                       className="min-h-[36px] px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-xs font-semibold text-[#0B1D3A] hover:bg-slate-50 disabled:opacity-60"
                     >
-                      {appliedParts.header ? 'Aplicado' : 'Aplicar Cabeçalho'}
+                      {savedIds.headerId ? 'Salvo como Perfil' : 'Salvar Perfil'}
                     </button>
                   </div>
                   <div className="bg-white border border-slate-200 rounded-lg p-3 text-xs text-slate-700 space-y-1">
@@ -533,11 +550,11 @@ export function PdfTemplateImportModal({
                     </label>
                     <button
                       type="button"
-                      disabled={applyingLetterhead || appliedParts.footer}
+                      disabled={applyingLetterhead || Boolean(savedIds.footerId)}
                       onClick={() => void handleApplySingle('footer')}
                       className="min-h-[36px] px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-xs font-semibold text-[#0B1D3A] hover:bg-slate-50 disabled:opacity-60"
                     >
-                      {appliedParts.footer ? 'Aplicado' : 'Aplicar Rodapé'}
+                      {savedIds.footerId ? 'Salvo como Perfil' : 'Salvar Perfil'}
                     </button>
                   </div>
                   <div className="bg-white border border-slate-200 rounded-lg p-3 text-xs text-slate-700 space-y-1">
@@ -573,11 +590,11 @@ export function PdfTemplateImportModal({
                     </label>
                     <button
                       type="button"
-                      disabled={applyingLetterhead || appliedParts.logo}
+                      disabled={applyingLetterhead || Boolean(savedIds.logoId)}
                       onClick={() => void handleApplySingle('logo')}
                       className="min-h-[36px] px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-xs font-semibold text-[#0B1D3A] hover:bg-slate-50 disabled:opacity-60"
                     >
-                      {appliedParts.logo ? 'Aplicado' : 'Aplicar Logotipo'}
+                      {savedIds.logoId ? 'Salvo na Galeria' : 'Salvar Logotipo'}
                     </button>
                   </div>
                   <div className="bg-white border border-slate-200 rounded-lg p-3 flex items-center justify-center">
@@ -594,10 +611,17 @@ export function PdfTemplateImportModal({
             <div className="flex flex-wrap items-center justify-end gap-2 pt-2">
               <button
                 type="button"
-                onClick={resetAndClose}
+                onClick={() => {
+                  onOpenExtractedTemplate({
+                    title: result.suggestedTitle,
+                    content: result.bodyText,
+                    notice: 'Modelo importado para o editor com sucesso.',
+                  });
+                  resetAndClose();
+                }}
                 className="min-h-[44px] px-4 py-2 rounded-xl border border-slate-300 text-sm font-semibold text-slate-700 hover:bg-slate-50"
               >
-                Ir para o Editor sem Aplicar
+                Abrir só o Texto no Editor
               </button>
               <button
                 type="button"
@@ -607,8 +631,8 @@ export function PdfTemplateImportModal({
               >
                 <Check className="w-4 h-4" aria-hidden="true" />
                 {applyingLetterhead
-                  ? 'Aplicando...'
-                  : 'Aplicar ao Timbrado e Editar Modelo'}
+                  ? 'Salvando...'
+                  : 'Salvar Selecionados e Editar Modelo'}
               </button>
             </div>
           </div>

@@ -1,6 +1,17 @@
 import { jsPDF } from 'jspdf';
-import type { LetterheadSettings, SignatureProvider } from '../types/legal';
+import type {
+  FooterProfile,
+  HeaderProfile,
+  LetterheadSettings,
+  LogoAsset,
+  SignatureProvider,
+} from '../types/legal';
 import { sanitizeFilenamePart, sha256Hex } from './masksAndFormatters';
+import {
+  getFontOption,
+  getSizeOption,
+  hexToRgb,
+} from './timbradoTheme';
 
 export interface GeneratedPdfArtifact {
   blob: Blob;
@@ -18,23 +29,30 @@ const BOLD_PREFIXES = [
   'CLÁUSULA',
 ];
 
-function drawLetterheadHeader(
+function drawResolvedHeader(
   doc: jsPDF,
-  letterhead: LetterheadSettings,
+  header: HeaderProfile | null,
+  logo: LogoAsset | null,
   pageWidth: number,
   marginX: number
 ): number {
-  // Subtle top navy bar
+  // Subtle top navy accent bar
   doc.setFillColor(11, 29, 58); // #0B1D3A
-  doc.rect(0, 0, pageWidth, 6, 'F');
+  doc.rect(0, 0, pageWidth, 5.5, 'F');
 
-  const align = letterhead.headerAlignment || 'center';
-  const textX = align === 'left' ? marginX : align === 'right' ? pageWidth - marginX : pageWidth / 2;
+  // If "Sem cabeçalho" AND "Sem logotipo", start body cleanly near top
+  if (!header && !logo) {
+    return 20;
+  }
 
-  let textOffsetY = 20;
-  if (letterhead.logoDataUrl && letterhead.logoDataUrl.startsWith('data:image/')) {
+  const align = header?.alignment || 'center';
+  const textX =
+    align === 'left' ? marginX : align === 'right' ? pageWidth - marginX : pageWidth / 2;
+
+  let textOffsetY = 19;
+  if (logo?.dataUrl && logo.dataUrl.startsWith('data:image/')) {
     try {
-      const imgFormat = letterhead.logoDataUrl.includes('image/png') ? 'PNG' : 'JPEG';
+      const imgFormat = logo.dataUrl.includes('image/png') ? 'PNG' : 'JPEG';
       const logoW = 16;
       const logoH = 16;
       const logoX =
@@ -43,30 +61,37 @@ function drawLetterheadHeader(
           : align === 'right'
             ? pageWidth - marginX - logoW
             : (pageWidth - logoW) / 2;
-      doc.addImage(letterhead.logoDataUrl, imgFormat, logoX, 10, logoW, logoH);
+      doc.addImage(logo.dataUrl, imgFormat, logoX, 10, logoW, logoH);
       textOffsetY = 31;
     } catch {
       // Ignore malformed image
     }
   }
 
+  if (!header) {
+    return textOffsetY + 6;
+  }
+
+  const fontOpt = getFontOption(header.fontFamily);
+  const sizeOpt = getSizeOption(header.textSize);
+  const [r, g, b] = hexToRgb(header.textColor);
+
   // Office Title
-  doc.setFont('times', 'bold');
-  doc.setFontSize(12.5);
-  doc.setTextColor(11, 29, 58);
-  doc.text(letterhead.officeTitle.toUpperCase(), textX, textOffsetY, { align });
+  doc.setFont(fontOpt.pdfFamily, 'bold');
+  doc.setFontSize(sizeOpt.headerTitlePdfPt);
+  doc.setTextColor(r, g, b);
+  doc.text(header.officeTitle.toUpperCase(), textX, textOffsetY, { align });
 
   // OAB & Subtitle
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9.5);
+  doc.setFont(fontOpt.pdfFamily, 'bold');
+  doc.setFontSize(sizeOpt.headerSubPdfPt);
   doc.setTextColor(154, 120, 53); // Matte Gold #9A7835
-  const oabLine = letterhead.subtitle
-    ? `${letterhead.oabNumber}  |  ${letterhead.subtitle}`
-    : letterhead.oabNumber;
-  doc.text(oabLine, textX, textOffsetY + 6, { align });
+  const oabLine = header.subtitle
+    ? `${header.oabNumber}  |  ${header.subtitle}`
+    : header.oabNumber;
+  doc.text(oabLine, textX, textOffsetY + 5.8, { align });
 
   const dividerY = textOffsetY + 10;
-  // Gold horizontal divider
   doc.setDrawColor(184, 147, 74);
   doc.setLineWidth(0.6);
   doc.line(marginX, dividerY, pageWidth - marginX, dividerY);
@@ -74,48 +99,127 @@ function drawLetterheadHeader(
   return dividerY + 8;
 }
 
-function drawLetterheadFooter(
+function drawResolvedFooter(
   doc: jsPDF,
-  letterhead: LetterheadSettings,
+  footer: FooterProfile | null,
+  letterheadFallback: LetterheadSettings | undefined,
   pageWidth: number,
   pageHeight: number,
   marginX: number
 ): void {
-  const footerTop = pageHeight - 22;
+  if (!footer) return;
+
+  const footerTop = pageHeight - 23;
   doc.setDrawColor(203, 213, 225);
   doc.setLineWidth(0.3);
   doc.line(marginX, footerTop, pageWidth - marginX, footerTop);
 
-  if (letterhead.sealDataUrl && letterhead.sealDataUrl.startsWith('data:image/')) {
+  if (letterheadFallback?.sealDataUrl && letterheadFallback.sealDataUrl.startsWith('data:image/')) {
     try {
-      const imgFormat = letterhead.sealDataUrl.includes('image/png') ? 'PNG' : 'JPEG';
-      doc.addImage(letterhead.sealDataUrl, imgFormat, pageWidth - marginX - 12, footerTop + 2, 12, 12);
+      const imgFormat = letterheadFallback.sealDataUrl.includes('image/png') ? 'PNG' : 'JPEG';
+      doc.addImage(
+        letterheadFallback.sealDataUrl,
+        imgFormat,
+        pageWidth - marginX - 12,
+        footerTop + 2,
+        12,
+        12
+      );
     } catch {
       // Ignore malformed seal
     }
   }
 
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  doc.setTextColor(71, 85, 105);
-  doc.text(letterhead.addressFooter, pageWidth / 2, footerTop + 5.5, { align: 'center' });
+  const align = footer.alignment || 'center';
+  const textX =
+    align === 'left' ? marginX : align === 'right' ? pageWidth - marginX : pageWidth / 2;
+  const fontOpt = getFontOption(footer.fontFamily);
+  const sizeOpt = getSizeOption(footer.textSize);
+  const [r, g, b] = hexToRgb(footer.textColor);
+
+  doc.setFont(fontOpt.pdfFamily, 'normal');
+  doc.setFontSize(sizeOpt.footerPdfPt);
+  doc.setTextColor(r, g, b);
+  doc.text(footer.addressFooter, textX, footerTop + 5.5, { align });
 
   const contactParts = [
-    `Tel/WhatsApp: ${letterhead.phone}`,
-    `E-mail: ${letterhead.email}`,
-    letterhead.instagram ? letterhead.instagram : '',
-    letterhead.website ? letterhead.website : '',
+    footer.phone ? `Tel/WhatsApp: ${footer.phone}` : '',
+    footer.email ? `E-mail: ${footer.email}` : '',
+    footer.instagram ? footer.instagram : '',
+    footer.website ? footer.website : '',
   ].filter(Boolean);
-  doc.text(contactParts.join('  |  '), pageWidth / 2, footerTop + 10.5, { align: 'center' });
+  doc.text(contactParts.join('  |  '), textX, footerTop + 10.5, { align });
+}
+
+function legacyHeaderFromLetterhead(lh?: LetterheadSettings): HeaderProfile | null {
+  if (!lh) return null;
+  return {
+    id: 'legacy_header',
+    name: 'Cabeçalho Principal',
+    officeTitle: lh.officeTitle,
+    oabNumber: lh.oabNumber,
+    subtitle: lh.subtitle || '',
+    alignment: lh.headerAlignment || 'center',
+    fontFamily: 'playfair',
+    textSize: 'medium',
+    textColor: '#0B1D3A',
+    isDefault: true,
+    createdAt: lh.updatedAt,
+    updatedAt: lh.updatedAt,
+    updatedBy: lh.updatedBy,
+  };
+}
+
+function legacyFooterFromLetterhead(lh?: LetterheadSettings): FooterProfile | null {
+  if (!lh) return null;
+  return {
+    id: 'legacy_footer',
+    name: 'Rodapé Padrão',
+    addressFooter: lh.addressFooter,
+    phone: lh.phone,
+    email: lh.email,
+    instagram: lh.instagram || '',
+    website: lh.website || '',
+    alignment: 'center',
+    fontFamily: 'inter',
+    textSize: 'medium',
+    textColor: '#475569',
+    isDefault: true,
+    createdAt: lh.updatedAt,
+    updatedAt: lh.updatedAt,
+    updatedBy: lh.updatedBy,
+  };
+}
+
+function legacyLogoFromLetterhead(lh?: LetterheadSettings): LogoAsset | null {
+  if (!lh?.logoDataUrl) return null;
+  return {
+    id: 'legacy_logo',
+    name: 'Logomarca',
+    dataUrl: lh.logoDataUrl,
+    isDefault: true,
+    createdAt: lh.updatedAt,
+    updatedAt: lh.updatedAt,
+    updatedBy: lh.updatedBy,
+  };
 }
 
 export async function generateLegalDocumentPdf(params: {
   documentTitle: string;
   renderedText: string;
-  letterhead: LetterheadSettings;
+  letterhead?: LetterheadSettings;
+  header?: HeaderProfile | null;
+  footer?: FooterProfile | null;
+  logo?: LogoAsset | null;
   clientName: string;
 }): Promise<GeneratedPdfArtifact> {
   const { documentTitle, renderedText, letterhead, clientName } = params;
+  const resolvedHeader =
+    params.header !== undefined ? params.header : legacyHeaderFromLetterhead(letterhead);
+  const resolvedFooter =
+    params.footer !== undefined ? params.footer : legacyFooterFromLetterhead(letterhead);
+  const resolvedLogo =
+    params.logo !== undefined ? params.logo : legacyLogoFromLetterhead(letterhead);
 
   const doc = new jsPDF({
     orientation: 'portrait',
@@ -130,7 +234,7 @@ export async function generateLegalDocumentPdf(params: {
   const contentWidth = pageWidth - marginX * 2;
   const maxBodyY = pageHeight - 36;
 
-  let cursorY = drawLetterheadHeader(doc, letterhead, pageWidth, marginX);
+  let cursorY = drawResolvedHeader(doc, resolvedHeader, resolvedLogo, pageWidth, marginX);
 
   // Document Title
   doc.setFont('times', 'bold');
@@ -146,7 +250,7 @@ export async function generateLegalDocumentPdf(params: {
     if (!paragraph) continue;
 
     const matchedPrefix = BOLD_PREFIXES.find((prefix) => paragraph.startsWith(prefix));
-    doc.setFont('times', matchedPrefix ? 'normal' : 'normal');
+    doc.setFont('times', 'normal');
     doc.setFontSize(11);
     doc.setTextColor(15, 23, 42);
 
@@ -154,15 +258,14 @@ export async function generateLegalDocumentPdf(params: {
     const blockHeight = lines.length * 5.6 + 4;
 
     if (cursorY + blockHeight > maxBodyY) {
-      drawLetterheadFooter(doc, letterhead, pageWidth, pageHeight, marginX);
+      drawResolvedFooter(doc, resolvedFooter, letterhead, pageWidth, pageHeight, marginX);
       doc.addPage();
-      cursorY = drawLetterheadHeader(doc, letterhead, pageWidth, marginX);
+      cursorY = drawResolvedHeader(doc, resolvedHeader, resolvedLogo, pageWidth, marginX);
       doc.setFont('times', 'normal');
       doc.setFontSize(11);
       doc.setTextColor(15, 23, 42);
     }
 
-    // Highlight leading section label if present on first line
     if (matchedPrefix && lines.length > 0) {
       const colonIdx = lines[0].indexOf(':');
       if (colonIdx > 0 && colonIdx <= 24) {
@@ -192,9 +295,9 @@ export async function generateLegalDocumentPdf(params: {
 
   // Ensure enough space for signature block (needs ~42mm)
   if (cursorY + 42 > maxBodyY) {
-    drawLetterheadFooter(doc, letterhead, pageWidth, pageHeight, marginX);
+    drawResolvedFooter(doc, resolvedFooter, letterhead, pageWidth, pageHeight, marginX);
     doc.addPage();
-    cursorY = drawLetterheadHeader(doc, letterhead, pageWidth, marginX) + 8;
+    cursorY = drawResolvedHeader(doc, resolvedHeader, resolvedLogo, pageWidth, marginX) + 8;
   } else {
     cursorY += 10;
   }
@@ -211,9 +314,12 @@ export async function generateLegalDocumentPdf(params: {
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
   doc.setTextColor(100, 116, 139);
-  doc.text('Área reservada para Assinatura Eletrônica (Gov.br / Clicksign / DocuSign)', pageWidth / 2, cursorY + 5, {
-    align: 'center',
-  });
+  doc.text(
+    'Área reservada para Assinatura Eletrônica (Gov.br / Clicksign / DocuSign)',
+    pageWidth / 2,
+    cursorY + 5,
+    { align: 'center' }
+  );
 
   doc.setDrawColor(11, 29, 58);
   doc.setLineWidth(0.4);
@@ -224,7 +330,7 @@ export async function generateLegalDocumentPdf(params: {
   doc.setTextColor(11, 29, 58);
   doc.text(clientName.toUpperCase(), pageWidth / 2, cursorY + 19.5, { align: 'center' });
 
-  drawLetterheadFooter(doc, letterhead, pageWidth, pageHeight, marginX);
+  drawResolvedFooter(doc, resolvedFooter, letterhead, pageWidth, pageHeight, marginX);
 
   const arrayBuffer = doc.output('arraybuffer');
   const blob = new Blob([arrayBuffer], { type: 'application/pdf' });
@@ -249,7 +355,10 @@ export async function generateLegalDocumentPdf(params: {
 export async function generateSignedDocumentPdf(params: {
   documentTitle: string;
   renderedText: string;
-  letterhead: LetterheadSettings;
+  letterhead?: LetterheadSettings;
+  header?: HeaderProfile | null;
+  footer?: FooterProfile | null;
+  logo?: LogoAsset | null;
   clientName: string;
   provider: SignatureProvider;
   envelopeId: string;
@@ -271,6 +380,13 @@ export async function generateSignedDocumentPdf(params: {
     signatureDataUrl,
   } = params;
 
+  const resolvedHeader =
+    params.header !== undefined ? params.header : legacyHeaderFromLetterhead(letterhead);
+  const resolvedFooter =
+    params.footer !== undefined ? params.footer : legacyFooterFromLetterhead(letterhead);
+  const resolvedLogo =
+    params.logo !== undefined ? params.logo : legacyLogoFromLetterhead(letterhead);
+
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
@@ -284,7 +400,7 @@ export async function generateSignedDocumentPdf(params: {
   const contentWidth = pageWidth - marginX * 2;
   const maxBodyY = pageHeight - 36;
 
-  let cursorY = drawLetterheadHeader(doc, letterhead, pageWidth, marginX);
+  let cursorY = drawResolvedHeader(doc, resolvedHeader, resolvedLogo, pageWidth, marginX);
 
   doc.setFont('times', 'bold');
   doc.setFontSize(14);
@@ -306,9 +422,9 @@ export async function generateSignedDocumentPdf(params: {
     const blockHeight = lines.length * 5.6 + 4;
 
     if (cursorY + blockHeight > maxBodyY) {
-      drawLetterheadFooter(doc, letterhead, pageWidth, pageHeight, marginX);
+      drawResolvedFooter(doc, resolvedFooter, letterhead, pageWidth, pageHeight, marginX);
       doc.addPage();
-      cursorY = drawLetterheadHeader(doc, letterhead, pageWidth, marginX);
+      cursorY = drawResolvedHeader(doc, resolvedHeader, resolvedLogo, pageWidth, marginX);
     }
 
     if (matchedPrefix && lines.length > 0) {
@@ -340,9 +456,9 @@ export async function generateSignedDocumentPdf(params: {
 
   // Embedded Electronic Signature Block
   if (cursorY + 52 > maxBodyY) {
-    drawLetterheadFooter(doc, letterhead, pageWidth, pageHeight, marginX);
+    drawResolvedFooter(doc, resolvedFooter, letterhead, pageWidth, pageHeight, marginX);
     doc.addPage();
-    cursorY = drawLetterheadHeader(doc, letterhead, pageWidth, marginX) + 6;
+    cursorY = drawResolvedHeader(doc, resolvedHeader, resolvedLogo, pageWidth, marginX) + 6;
   } else {
     cursorY += 8;
   }
@@ -375,7 +491,7 @@ export async function generateSignedDocumentPdf(params: {
   doc.text(`Hash Original (SHA-256): ${documentHash.slice(0, 36)}...`, marginX + 6, cursorY + 31);
   doc.text(`Hash Auditoria (MP 2.200-2/2001): ${auditHash.slice(0, 36)}...`, marginX + 6, cursorY + 36);
 
-  drawLetterheadFooter(doc, letterhead, pageWidth, pageHeight, marginX);
+  drawResolvedFooter(doc, resolvedFooter, letterhead, pageWidth, pageHeight, marginX);
 
   const arrayBuffer = doc.output('arraybuffer');
   const blob = new Blob([arrayBuffer], { type: 'application/pdf' });

@@ -46,6 +46,26 @@ service cloud.firestore {
       );
     }
 
+    function isOfficeScoped(data) {
+      return 'officeId' in data && data.officeId == 'mayara_martins_oab_229359';
+    }
+
+    function isValidFontFamily(val) {
+      return val in ['playfair', 'inter', 'times', 'georgia', 'montserrat', 'lora'];
+    }
+
+    function isValidTextSize(val) {
+      return val in ['small', 'medium', 'large'];
+    }
+
+    function isValidAlignment(val) {
+      return val in ['left', 'center', 'right'];
+    }
+
+    function isValidHexColor(val) {
+      return val is string && val.matches('^#[0-9a-fA-F]{6}$');
+    }
+
     // -------------------------------------------------------------------------
     // Entity Validation Blueprints
     // -------------------------------------------------------------------------
@@ -59,17 +79,94 @@ service cloud.firestore {
         data.createdAt is timestamp;
     }
 
+    function isValidHeaderProfile(data) {
+      return data.keys().hasAll([
+          'id', 'name', 'officeTitle', 'oabNumber', 'alignment',
+          'fontFamily', 'textSize', 'textColor', 'isDefault',
+          'officeId', 'createdAt', 'updatedAt', 'updatedBy'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'name', 'officeTitle', 'oabNumber', 'subtitle', 'alignment',
+          'fontFamily', 'textSize', 'textColor', 'isDefault',
+          'officeId', 'createdAt', 'updatedAt', 'updatedBy'
+        ]) &&
+        isValidId(data.id) &&
+        data.name is string && data.name.size() >= 2 && data.name.size() <= 100 &&
+        data.officeTitle is string && data.officeTitle.size() >= 2 && data.officeTitle.size() <= 160 &&
+        data.oabNumber is string && data.oabNumber.size() >= 2 && data.oabNumber.size() <= 60 &&
+        (!('subtitle' in data) || (data.subtitle is string && data.subtitle.size() <= 160)) &&
+        isValidAlignment(data.alignment) &&
+        isValidFontFamily(data.fontFamily) &&
+        isValidTextSize(data.textSize) &&
+        isValidHexColor(data.textColor) &&
+        data.isDefault is bool &&
+        isOfficeScoped(data) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp &&
+        data.updatedBy is string && data.updatedBy.size() >= 1 && data.updatedBy.size() <= 128;
+    }
+
+    function isValidFooterProfile(data) {
+      return data.keys().hasAll([
+          'id', 'name', 'addressFooter', 'phone', 'email', 'alignment',
+          'fontFamily', 'textSize', 'textColor', 'isDefault',
+          'officeId', 'createdAt', 'updatedAt', 'updatedBy'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'name', 'addressFooter', 'phone', 'email', 'instagram', 'website',
+          'alignment', 'fontFamily', 'textSize', 'textColor', 'isDefault',
+          'officeId', 'createdAt', 'updatedAt', 'updatedBy'
+        ]) &&
+        isValidId(data.id) &&
+        data.name is string && data.name.size() >= 2 && data.name.size() <= 100 &&
+        data.addressFooter is string && data.addressFooter.size() >= 5 && data.addressFooter.size() <= 300 &&
+        data.phone is string && data.phone.size() >= 4 && data.phone.size() <= 40 &&
+        data.email is string && data.email.size() >= 3 && data.email.size() <= 120 &&
+        (!('instagram' in data) || (data.instagram is string && data.instagram.size() <= 80)) &&
+        (!('website' in data) || (data.website is string && data.website.size() <= 160)) &&
+        isValidAlignment(data.alignment) &&
+        isValidFontFamily(data.fontFamily) &&
+        isValidTextSize(data.textSize) &&
+        isValidHexColor(data.textColor) &&
+        data.isDefault is bool &&
+        isOfficeScoped(data) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp &&
+        data.updatedBy is string && data.updatedBy.size() >= 1 && data.updatedBy.size() <= 128;
+    }
+
+    function isValidLogoAsset(data) {
+      return data.keys().hasAll([
+          'id', 'name', 'dataUrl', 'isDefault',
+          'officeId', 'createdAt', 'updatedAt', 'updatedBy'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'name', 'formatLabel', 'dataUrl', 'isDefault',
+          'officeId', 'createdAt', 'updatedAt', 'updatedBy'
+        ]) &&
+        isValidId(data.id) &&
+        data.name is string && data.name.size() >= 2 && data.name.size() <= 100 &&
+        (!('formatLabel' in data) || (data.formatLabel is string && data.formatLabel.size() <= 40)) &&
+        data.dataUrl is string && data.dataUrl.size() >= 20 && data.dataUrl.size() <= 350000 &&
+        data.dataUrl.matches('^data:image/(png|jpeg|jpg|webp);base64,.*$') &&
+        data.isDefault is bool &&
+        isOfficeScoped(data) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp &&
+        data.updatedBy is string && data.updatedBy.size() >= 1 && data.updatedBy.size() <= 128;
+    }
+
     function isValidLetterhead(data) {
       return data.keys().hasAll(['officeTitle', 'oabNumber', 'addressFooter', 'phone', 'email', 'updatedAt', 'updatedBy']) &&
         data.keys().hasOnly([
           'officeTitle', 'oabNumber', 'subtitle', 'headerAlignment',
           'addressFooter', 'phone', 'email', 'instagram', 'website',
-          'logoDataUrl', 'sealDataUrl', 'updatedAt', 'updatedBy'
+          'logoDataUrl', 'sealDataUrl', 'officeId', 'updatedAt', 'updatedBy'
         ]) &&
         data.officeTitle is string && data.officeTitle.size() >= 2 && data.officeTitle.size() <= 160 &&
         data.oabNumber is string && data.oabNumber.size() >= 2 && data.oabNumber.size() <= 60 &&
         (!('subtitle' in data) || (data.subtitle is string && data.subtitle.size() <= 160)) &&
-        (!('headerAlignment' in data) || data.headerAlignment in ['left', 'center', 'right']) &&
+        (!('headerAlignment' in data) || isValidAlignment(data.headerAlignment)) &&
         data.addressFooter is string && data.addressFooter.size() >= 5 && data.addressFooter.size() <= 300 &&
         data.phone is string && data.phone.size() >= 4 && data.phone.size() <= 40 &&
         data.email is string && data.email.size() >= 3 && data.email.size() <= 120 &&
@@ -77,24 +174,30 @@ service cloud.firestore {
         (!('website' in data) || (data.website is string && data.website.size() <= 160)) &&
         (!('logoDataUrl' in data) || data.logoDataUrl == null || (data.logoDataUrl is string && data.logoDataUrl.size() <= 350000)) &&
         (!('sealDataUrl' in data) || data.sealDataUrl == null || (data.sealDataUrl is string && data.sealDataUrl.size() <= 350000)) &&
+        (!('officeId' in data) || isOfficeScoped(data)) &&
         data.updatedAt is timestamp &&
         data.updatedBy is string && data.updatedBy.size() >= 1 && data.updatedBy.size() <= 128;
     }
 
     function isValidSignatureConfig(data) {
       return data.keys().hasAll(['defaultProvider', 'clicksignEnabled', 'docusignEnabled', 'govbrEnabled', 'updatedAt', 'updatedBy']) &&
-        data.keys().hasOnly(['defaultProvider', 'clicksignEnabled', 'docusignEnabled', 'govbrEnabled', 'updatedAt', 'updatedBy']) &&
+        data.keys().hasOnly(['defaultProvider', 'clicksignEnabled', 'docusignEnabled', 'govbrEnabled', 'officeId', 'updatedAt', 'updatedBy']) &&
         data.defaultProvider in ['clicksign', 'docusign'] &&
         data.clicksignEnabled is bool &&
         data.docusignEnabled is bool &&
         data.govbrEnabled is bool &&
+        (!('officeId' in data) || isOfficeScoped(data)) &&
         data.updatedAt is timestamp &&
         data.updatedBy is string && data.updatedBy.size() >= 1 && data.updatedBy.size() <= 128;
     }
 
     function isValidTemplate(data) {
       return data.keys().hasAll(['id', 'title', 'category', 'content', 'isDefault', 'ownerUid', 'createdAt', 'updatedAt']) &&
-        data.keys().hasOnly(['id', 'title', 'category', 'content', 'isDefault', 'customFields', 'ownerUid', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly([
+          'id', 'title', 'category', 'content', 'isDefault', 'customFields',
+          'headerId', 'footerId', 'logoId', 'officeId',
+          'ownerUid', 'createdAt', 'updatedAt'
+        ]) &&
         isValidId(data.id) &&
         data.title is string && data.title.size() >= 2 && data.title.size() <= 140 &&
         data.category is string && data.category.size() >= 2 && data.category.size() <= 80 &&
@@ -108,20 +211,61 @@ service cloud.firestore {
             data.customFields[0].keys().hasAll(['key', 'tag', 'label', 'fieldType'])
           ))
         )) &&
+        (!('headerId' in data) || data.headerId == null || isValidId(data.headerId)) &&
+        (!('footerId' in data) || data.footerId == null || isValidId(data.footerId)) &&
+        (!('logoId' in data) || data.logoId == null || isValidId(data.logoId)) &&
+        (!('officeId' in data) || isOfficeScoped(data)) &&
         isValidId(data.ownerUid) &&
         data.createdAt is timestamp &&
         data.updatedAt is timestamp;
     }
 
+    function isValidClientRecord(data) {
+      return data.keys().hasAll([
+          'id', 'fullName', 'whatsapp', 'officeId', 'createdAt', 'updatedAt', 'updatedBy'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'fullName', 'cpf', 'rg', 'email', 'whatsapp', 'address',
+          'nationality', 'maritalStatus', 'profession',
+          'officeId', 'createdAt', 'updatedAt', 'updatedBy'
+        ]) &&
+        isValidId(data.id) &&
+        data.fullName is string && data.fullName.size() >= 2 && data.fullName.size() <= 140 &&
+        (!('cpf' in data) || (data.cpf is string && data.cpf.size() <= 25)) &&
+        (!('rg' in data) || (data.rg is string && data.rg.size() <= 30)) &&
+        (!('email' in data) || (data.email is string && data.email.size() <= 160)) &&
+        data.whatsapp is string && data.whatsapp.size() >= 4 && data.whatsapp.size() <= 30 &&
+        (!('address' in data) || (data.address is string && data.address.size() <= 350)) &&
+        (!('nationality' in data) || (data.nationality is string && data.nationality.size() <= 80)) &&
+        (!('maritalStatus' in data) || (data.maritalStatus is string && data.maritalStatus.size() <= 60)) &&
+        (!('profession' in data) || (data.profession is string && data.profession.size() <= 100)) &&
+        isOfficeScoped(data) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp &&
+        data.updatedBy is string && data.updatedBy.size() >= 1 && data.updatedBy.size() <= 128;
+    }
+
+    function isValidChangelogState(data) {
+      return data.keys().hasAll(['version', 'checkedIds', 'updatedAt', 'updatedBy']) &&
+        data.keys().hasOnly(['version', 'checkedIds', 'officeId', 'updatedAt', 'updatedBy']) &&
+        data.version is string && data.version.size() >= 2 && data.version.size() <= 40 &&
+        data.checkedIds is list && data.checkedIds.size() <= 50 &&
+        (data.checkedIds.size() == 0 || (data.checkedIds[0] is string && data.checkedIds[0].size() <= 80)) &&
+        (!('officeId' in data) || isOfficeScoped(data)) &&
+        data.updatedAt is timestamp &&
+        data.updatedBy is string && data.updatedBy.size() >= 1 && data.updatedBy.size() <= 128;
+    }
+
     function isValidServiceLink(data) {
       return data.keys().hasAll(['tokenId', 'clientName', 'whatsapp', 'pin', 'templateId', 'templateTitle', 'status', 'signatureMethod', 'ownerUid', 'createdAt']) &&
         data.keys().hasOnly([
-          'tokenId', 'clientName', 'whatsapp', 'pin', 'templateId', 'templateTitle',
+          'tokenId', 'clientId', 'clientName', 'whatsapp', 'pin', 'templateId', 'templateTitle',
           'status', 'signatureMethod', 'signatureEnvelopeId', 'signatureAuditHash',
-          'signedPdfUrl', 'signedPdfStoragePath', 'signedPdfName', 'ownerUid',
+          'signedPdfUrl', 'signedPdfStoragePath', 'signedPdfName', 'officeId', 'ownerUid',
           'createdAt', 'completedAt'
         ]) &&
         isValidTokenId(data.tokenId) &&
+        (!('clientId' in data) || data.clientId == null || isValidId(data.clientId)) &&
         data.clientName is string && data.clientName.size() >= 2 && data.clientName.size() <= 120 &&
         data.whatsapp is string && data.whatsapp.size() >= 8 && data.whatsapp.size() <= 25 &&
         data.pin is string && data.pin.matches('^[0-9]{4}$') &&
@@ -134,6 +278,7 @@ service cloud.firestore {
         (!('signedPdfUrl' in data) || data.signedPdfUrl == null || (data.signedPdfUrl is string && data.signedPdfUrl.size() <= 2000)) &&
         (!('signedPdfStoragePath' in data) || data.signedPdfStoragePath == null || (data.signedPdfStoragePath is string && data.signedPdfStoragePath.size() <= 300)) &&
         (!('signedPdfName' in data) || data.signedPdfName == null || (data.signedPdfName is string && data.signedPdfName.size() <= 200)) &&
+        (!('officeId' in data) || isOfficeScoped(data)) &&
         isValidId(data.ownerUid) &&
         data.createdAt is timestamp &&
         (!('completedAt' in data) || data.completedAt == null || data.completedAt is timestamp);
@@ -154,38 +299,104 @@ service cloud.firestore {
       allow delete: if isBootstrappedAdmin() && isValidId(adminUid);
     }
 
+    match /headers/{headerId} {
+      allow get: if isValidId(headerId) && (isAdmin() || resource == null || isOfficeScoped(existing()));
+      allow list: if isAdmin() || isOfficeScoped(existing());
+      allow create: if (isAdmin() || isOfficeScoped(incoming())) &&
+        isValidId(headerId) && isValidHeaderProfile(incoming()) &&
+        incoming().id == headerId &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if (isAdmin() || (isOfficeScoped(existing()) && isOfficeScoped(incoming()))) &&
+        isValidId(headerId) && isValidHeaderProfile(incoming()) &&
+        incoming().id == existing().id &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time;
+      allow delete: if isValidId(headerId) && (isAdmin() || isOfficeScoped(existing()));
+    }
+
+    match /footers/{footerId} {
+      allow get: if isValidId(footerId) && (isAdmin() || resource == null || isOfficeScoped(existing()));
+      allow list: if isAdmin() || isOfficeScoped(existing());
+      allow create: if (isAdmin() || isOfficeScoped(incoming())) &&
+        isValidId(footerId) && isValidFooterProfile(incoming()) &&
+        incoming().id == footerId &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if (isAdmin() || (isOfficeScoped(existing()) && isOfficeScoped(incoming()))) &&
+        isValidId(footerId) && isValidFooterProfile(incoming()) &&
+        incoming().id == existing().id &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time;
+      allow delete: if isValidId(footerId) && (isAdmin() || isOfficeScoped(existing()));
+    }
+
+    match /logos/{logoId} {
+      allow get: if isValidId(logoId) && (isAdmin() || resource == null || isOfficeScoped(existing()));
+      allow list: if isAdmin() || isOfficeScoped(existing());
+      allow create: if (isAdmin() || isOfficeScoped(incoming())) &&
+        isValidId(logoId) && isValidLogoAsset(incoming()) &&
+        incoming().id == logoId &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if (isAdmin() || (isOfficeScoped(existing()) && isOfficeScoped(incoming()))) &&
+        isValidId(logoId) && isValidLogoAsset(incoming()) &&
+        incoming().id == existing().id &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time;
+      allow delete: if isValidId(logoId) && (isAdmin() || isOfficeScoped(existing()));
+    }
+
+    match /clients/{clientId} {
+      allow get: if isValidId(clientId) && (isAdmin() || resource == null || isOfficeScoped(existing()));
+      allow list: if isAdmin() || isOfficeScoped(existing());
+      allow create: if (isAdmin() || isOfficeScoped(incoming())) &&
+        isValidId(clientId) && isValidClientRecord(incoming()) &&
+        incoming().id == clientId &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if (isAdmin() || (isOfficeScoped(existing()) && isOfficeScoped(incoming()))) &&
+        isValidId(clientId) && isValidClientRecord(incoming()) &&
+        incoming().id == existing().id &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time;
+      allow delete: if isValidId(clientId) && (isAdmin() || isOfficeScoped(existing()));
+    }
+
     match /settings/{settingId} {
-      allow get: if isAdmin() || (settingId in ['letterhead', 'signatureConfig']);
-      allow list: if isAdmin();
-      allow create, update: if isAdmin() && isValidId(settingId) && (
-        (settingId == 'letterhead' && isValidLetterhead(incoming()) && incoming().updatedAt == request.time && incoming().updatedBy == request.auth.uid) ||
-        (settingId == 'signatureConfig' && isValidSignatureConfig(incoming()) && incoming().updatedAt == request.time && incoming().updatedBy == request.auth.uid)
+      allow get: if isAdmin() || (settingId in ['letterhead', 'signatureConfig', 'changelogProgress']);
+      allow list: if isAdmin() || isOfficeScoped(existing());
+      allow create, update: if (isAdmin() || isOfficeScoped(incoming())) && isValidId(settingId) && (
+        (settingId == 'letterhead' && isValidLetterhead(incoming()) && incoming().updatedAt == request.time) ||
+        (settingId == 'signatureConfig' && isValidSignatureConfig(incoming()) && incoming().updatedAt == request.time) ||
+        (settingId == 'changelogProgress' && isValidChangelogState(incoming()) && incoming().updatedAt == request.time)
       );
       allow delete: if false;
     }
 
     match /templates/{templateId} {
       allow get: if isAdmin() || isValidId(templateId);
-      allow list: if isAdmin();
-      allow create: if isAdmin() && isValidId(templateId) && isValidTemplate(incoming()) &&
+      allow list: if isAdmin() || isOfficeScoped(existing());
+      allow create: if (isAdmin() || isOfficeScoped(incoming())) &&
+        isValidId(templateId) && isValidTemplate(incoming()) &&
         incoming().id == templateId &&
-        incoming().ownerUid == request.auth.uid &&
         incoming().createdAt == request.time &&
         incoming().updatedAt == request.time;
-      allow update: if isAdmin() && isValidId(templateId) && isValidTemplate(incoming()) &&
+      allow update: if (isAdmin() || isOfficeScoped(incoming())) &&
+        isValidId(templateId) && isValidTemplate(incoming()) &&
         incoming().id == existing().id &&
         incoming().ownerUid == existing().ownerUid &&
         incoming().createdAt == existing().createdAt &&
         incoming().updatedAt == request.time;
-      allow delete: if isAdmin() && isValidId(templateId);
+      allow delete: if isValidId(templateId) && (isAdmin() || isOfficeScoped(existing()));
     }
 
-    match /serviceLinks/{tokenId} {
+    match /atendimentos/{tokenId} {
       allow get: if isAdmin() || isValidTokenId(tokenId);
-      allow list: if isAdmin();
-      allow create: if isAdmin() && isValidTokenId(tokenId) && isValidServiceLink(incoming()) &&
+      allow list: if isAdmin() || isOfficeScoped(existing());
+      allow create: if (isAdmin() || isOfficeScoped(incoming())) &&
+        isValidTokenId(tokenId) && isValidServiceLink(incoming()) &&
         incoming().tokenId == tokenId &&
-        incoming().ownerUid == request.auth.uid &&
         incoming().status == 'pendente' &&
         incoming().signatureMethod == 'none' &&
         incoming().createdAt == request.time;
@@ -212,7 +423,42 @@ service cloud.firestore {
             )
           )
         );
-      allow delete: if isAdmin() && isValidId(tokenId);
+      allow delete: if isValidId(tokenId) && (isAdmin() || isOfficeScoped(existing()));
+    }
+
+    match /serviceLinks/{tokenId} {
+      allow get: if isAdmin() || isValidTokenId(tokenId);
+      allow list: if isAdmin() || isOfficeScoped(existing());
+      allow create: if (isAdmin() || isOfficeScoped(incoming())) &&
+        isValidTokenId(tokenId) && isValidServiceLink(incoming()) &&
+        incoming().tokenId == tokenId &&
+        incoming().status == 'pendente' &&
+        incoming().signatureMethod == 'none' &&
+        incoming().createdAt == request.time;
+      allow update: if isValidTokenId(tokenId) && isValidServiceLink(incoming()) &&
+        incoming().tokenId == existing().tokenId &&
+        incoming().ownerUid == existing().ownerUid &&
+        incoming().createdAt == existing().createdAt && (
+          isAdmin() || (
+            existing().status != 'concluido' &&
+            incoming().clientName == existing().clientName &&
+            incoming().whatsapp == existing().whatsapp &&
+            incoming().pin == existing().pin &&
+            incoming().templateId == existing().templateId &&
+            incoming().templateTitle == existing().templateTitle &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'status', 'signatureMethod', 'signatureEnvelopeId', 'signatureAuditHash',
+              'signedPdfUrl', 'signedPdfStoragePath', 'signedPdfName', 'completedAt'
+            ]) && (
+              (incoming().status == 'assinando' && (!('completedAt' in incoming()) || incoming().completedAt == null)) ||
+              (incoming().status == 'concluido' &&
+               incoming().completedAt == request.time &&
+               incoming().signedPdfUrl is string &&
+               incoming().signedPdfUrl.size() >= 10)
+            )
+          )
+        );
+      allow delete: if isValidId(tokenId) && (isAdmin() || isOfficeScoped(existing()));
     }
   }
 }
