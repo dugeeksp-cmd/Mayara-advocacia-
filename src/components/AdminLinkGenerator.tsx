@@ -7,6 +7,10 @@ import {
   formatPhoneBR,
   generateWhatsAppUrl,
 } from '../utils/masksAndFormatters';
+import {
+  buildClientTokenRelativeHref,
+  buildClientTokenUrl,
+} from '../utils/portalUrl';
 
 interface AdminLinkGeneratorProps {
   templates: DocumentTemplate[];
@@ -61,8 +65,7 @@ export function AdminLinkGenerator({ templates, onLinkCreated }: AdminLinkGenera
         templateTitle: selectedTemplate.title,
       });
 
-      const origin = window.location.origin;
-      const clientUrl = `${origin}/?token=${encodeURIComponent(created.tokenId)}`;
+      const clientUrl = buildClientTokenUrl(created.tokenId);
       const waUrl = generateWhatsAppUrl(
         created.whatsapp,
         created.clientName,
@@ -258,7 +261,7 @@ export function AdminLinkGenerator({ templates, onLinkCreated }: AdminLinkGenera
               </button>
 
               <a
-                href={`/?token=${encodeURIComponent(generated.link.tokenId)}`}
+                href={buildClientTokenRelativeHref(generated.link.tokenId)}
                 className="min-h-[44px] px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs sm:text-sm font-semibold text-[#0B1D3A] hover:bg-slate-50 inline-flex items-center justify-center gap-1.5"
               >
                 <ExternalLink className="w-4 h-4" aria-hidden="true" />

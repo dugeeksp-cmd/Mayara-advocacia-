@@ -29,13 +29,34 @@ jobs:
           VITE_GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           VITE_APP_URL: ${{ secrets.APP_URL }}
 
+      - name: Resolve target FTP directory (/portal/)
+        id: ftp-target
+        shell: bash
+        env:
+          RAW_FTP_DIR: ${{ secrets.FTP_SERVER_DIR || secrets.FTP_DIR || './' }}
+        run: |
+          BASE_DIR="${RAW_FTP_DIR:-./}"
+          if [ "$BASE_DIR" = "/" ]; then
+            TARGET_DIR="/portal/"
+          else
+            BASE_DIR="${BASE_DIR%/}"
+            if [ -z "$BASE_DIR" ] || [ "$BASE_DIR" = "." ]; then
+              TARGET_DIR="./portal/"
+            elif [[ "$BASE_DIR" == */portal ]]; then
+              TARGET_DIR="${BASE_DIR}/"
+            else
+              TARGET_DIR="${BASE_DIR}/portal/"
+            fi
+          fi
+          echo "server-dir=$TARGET_DIR" >> "$GITHUB_OUTPUT"
+
       - name: Deploy static files via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
-          server-dir: ${{ secrets.FTP_DIR }}
+          server-dir: ${{ steps.ftp-target.outputs.server-dir }}
           local-dir: ./dist/
           exclude: |
             **/.git*

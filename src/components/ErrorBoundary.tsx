@@ -42,7 +42,7 @@ export class ErrorBoundary extends React.Component<
             <p className="text-sm text-slate-600 mb-6 leading-relaxed">{this.state.message}</p>
             <button
               type="button"
-              onClick={() => window.location.assign('/')}
+              onClick={() => window.location.assign('./')}
               className="inline-flex items-center justify-center gap-2 min-h-[44px] px-6 py-2.5 rounded-xl bg-[#0B1D3A] text-white text-sm font-semibold hover:bg-[#132B52] transition-colors"
             >
               <RotateCcw className="w-4 h-4" aria-hidden="true" />

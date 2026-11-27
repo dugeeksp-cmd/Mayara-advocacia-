@@ -34,6 +34,7 @@ import {
 import { interpolateTemplate } from '../utils/templateEngine';
 import { resolveTemplateTimbrado } from '../utils/timbradoTheme';
 import { generateLegalDocumentPdf, triggerBlobDownload } from '../utils/pdfGenerator';
+import { buildClientTokenUrl } from '../utils/portalUrl';
 
 export type { UnifiedClientEntry };
 
@@ -187,7 +188,7 @@ export function AdminClientSummaryModal({
   }
 
   async function handleCopyLink(tokenId: string) {
-    const url = `${window.location.origin}/?token=${encodeURIComponent(tokenId)}`;
+    const url = buildClientTokenUrl(tokenId);
     try {
       await navigator.clipboard.writeText(url);
       setCopiedId(tokenId);

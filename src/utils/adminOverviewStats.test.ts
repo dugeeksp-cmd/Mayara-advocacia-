@@ -86,7 +86,7 @@ test('computeAdminOverviewData prioritizes completed signed docs before signing 
   );
 });
 
-test('buildPendingReminderWhatsAppUrl generates valid wa.me link with token and PIN', () => {
+test('buildPendingReminderWhatsAppUrl generates valid wa.me link with token and PIN preserving /portal/', () => {
   const url = buildPendingReminderWhatsAppUrl(
     makeLink({
       clientName: 'Mariana Costa',
@@ -95,13 +95,13 @@ test('buildPendingReminderWhatsAppUrl generates valid wa.me link with token and 
       pin: '4321',
       templateTitle: 'Contrato de Honorários',
     }),
-    'https://escritorio.exemplo.br/'
+    'https://escritorio.exemplo.br/portal/'
   );
   assert.ok(url);
   assert.ok(url.startsWith('https://wa.me/5522998124321?text='));
   const decoded = decodeURIComponent(url.split('?text=')[1]);
   assert.ok(decoded.includes('Mariana Costa'));
-  assert.ok(decoded.includes('https://escritorio.exemplo.br/?token=tok_abc'));
+  assert.ok(decoded.includes('https://escritorio.exemplo.br/portal/?token=tok_abc'));
   assert.ok(decoded.includes('PIN de acesso: 4321'));
 
   assert.equal(

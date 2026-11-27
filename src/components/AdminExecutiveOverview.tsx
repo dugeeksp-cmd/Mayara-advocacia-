@@ -20,6 +20,7 @@ import {
   computeAdminOverviewData,
 } from '../utils/adminOverviewStats';
 import { formatDateTimeBR } from '../utils/masksAndFormatters';
+import { resolvePortalBaseUrl } from '../utils/portalUrl';
 
 interface AdminExecutiveOverviewProps {
   unifiedEntries: UnifiedClientEntry[];
@@ -45,8 +46,7 @@ export function AdminExecutiveOverview({
 
   const visibleReviewLinks = overview.reviewLinks.slice(0, 4);
   const visiblePendingLinks = overview.pendingLinks.slice(0, 2);
-  const origin =
-    typeof window !== 'undefined' ? window.location.origin : 'https://mayaramartins.adv.br';
+  const origin = resolvePortalBaseUrl();
 
   return (
     <section

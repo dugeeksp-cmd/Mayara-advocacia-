@@ -15,18 +15,19 @@ import {
   CURRENT_APP_VERSION,
   VersionChangelogModal,
 } from './components/VersionChangelogModal';
+import { cleanPortalPathname, resolveInitialPortalRoute } from './utils/portalUrl';
 
-function getInitialTokenFromUrl(): string {
-  if (typeof window === 'undefined') return '';
-  const params = new URLSearchParams(window.location.search);
-  return (params.get('token') || '').trim();
+function getInitialRoute() {
+  if (typeof window === 'undefined') {
+    return { initialToken: '', initialView: 'home' as const };
+  }
+  return resolveInitialPortalRoute(window.location.search);
 }
 
 export default function App() {
-  const [initialToken, setInitialToken] = useState<string>(() => getInitialTokenFromUrl());
-  const [activeView, setActiveView] = useState<AppView>(() =>
-    getInitialTokenFromUrl() ? 'client' : 'home'
-  );
+  const [initialRoute] = useState(() => getInitialRoute());
+  const [initialToken, setInitialToken] = useState<string>(initialRoute.initialToken);
+  const [activeView, setActiveView] = useState<AppView>(initialRoute.initialView);
   const [adminMode, setAdminMode] = useState<'firebase' | 'local' | null>(null);
   const [letterhead, setLetterhead] = useState<LetterheadSettings>(DEFAULT_LETTERHEAD);
   const [versionModalOpen, setVersionModalOpen] = useState(false);
@@ -52,17 +53,18 @@ export default function App() {
       if (user && user.emailVerified) {
         setPersistenceMode('firebase');
         setAdminMode('firebase');
+        setActiveView((prev) => (prev === 'admin-auth' ? 'admin' : prev));
       }
     });
     return () => unsubscribe();
   }, []);
 
   function handleNavigate(view: AppView) {
+    if (window.location.search) {
+      window.history.replaceState({}, '', cleanPortalPathname(window.location.pathname));
+    }
     if (view !== 'client') {
-      if (window.location.search.includes('token=')) {
-        window.history.replaceState({}, '', '/');
-        setInitialToken('');
-      }
+      setInitialToken('');
     }
     setActiveView(view);
   }

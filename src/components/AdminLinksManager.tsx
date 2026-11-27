@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import type { ServiceLink, ServiceLinkStatus } from '../types/legal';
 import { formatDateTimeBR } from '../utils/masksAndFormatters';
+import { buildClientTokenUrl } from '../utils/portalUrl';
 
 interface AdminLinksManagerProps {
   links: ServiceLink[];
@@ -53,7 +54,7 @@ export function AdminLinksManager({
   }, [links, filter, searchTerm]);
 
   async function handleCopyLink(tokenId: string) {
-    const url = `${window.location.origin}/?token=${encodeURIComponent(tokenId)}`;
+    const url = buildClientTokenUrl(tokenId);
     try {
       await navigator.clipboard.writeText(url);
       setCopiedId(tokenId);

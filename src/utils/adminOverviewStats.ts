@@ -1,6 +1,7 @@
 import type { DocumentTemplate, ServiceLink } from '../types/legal';
 import type { UnifiedClientEntry } from './legalFieldOptions';
 import { onlyDigits } from './masksAndFormatters';
+import { buildClientTokenUrl, DEFAULT_PRODUCTION_PORTAL_URL } from './portalUrl';
 
 export interface AdminOverviewData {
   uniqueRegisteredClientsCount: number;
@@ -56,13 +57,12 @@ export function computeAdminOverviewData(params: {
 
 export function buildPendingReminderWhatsAppUrl(
   link: Pick<ServiceLink, 'clientName' | 'whatsapp' | 'tokenId' | 'pin' | 'templateTitle'>,
-  origin = 'https://mayaramartins.adv.br'
+  portalBaseUrl = DEFAULT_PRODUCTION_PORTAL_URL
 ): string | null {
   const digits = onlyDigits(link.whatsapp);
   if (digits.length < 10) return null;
   const normalizedPhone = digits.startsWith('55') ? digits : `55${digits}`;
-  const cleanOrigin = origin.replace(/\/+$/, '');
-  const accessUrl = `${cleanOrigin}/?token=${encodeURIComponent(link.tokenId)}`;
+  const accessUrl = buildClientTokenUrl(link.tokenId, portalBaseUrl);
   const message =
     `Olá, ${link.clientName}! Aqui é do escritório Mayara Martins — Advocacia e Consultoria Jurídica.\n\n` +
     `Notamos que o preenchimento do documento "${link.templateTitle}" ainda está pendente.\n` +

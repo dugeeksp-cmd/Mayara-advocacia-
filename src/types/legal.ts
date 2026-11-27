@@ -102,13 +102,25 @@ export interface SignatureConfigSettings {
   updatedBy: string;
 }
 
+export type SignerPartyKind = 'lawyer' | 'client' | 'custom';
+
+export interface SignerParty {
+  id: string;
+  kind: SignerPartyKind;
+  name: string;
+  document: string;
+  role: string;
+}
+
 export interface DocumentTemplate {
   id: string;
   title: string;
+  documentTitle?: string;
   category: string;
   content: string;
   isDefault: boolean;
   customFields?: CustomTemplateField[];
+  signers?: SignerParty[];
   bodyFontSizePx?: number;
   headerId?: string | null;
   footerId?: string | null;
@@ -130,6 +142,9 @@ export interface ClientRecord {
   nationality: string;
   maritalStatus: string;
   profession: string;
+  passwordHash?: string;
+  passwordSalt?: string;
+  hasCustomPassword?: boolean;
   officeId?: string;
   createdAt: string;
   updatedAt: string;

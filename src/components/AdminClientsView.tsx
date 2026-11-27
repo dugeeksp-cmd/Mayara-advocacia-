@@ -13,6 +13,7 @@ import {
 import type { ServiceLinkStatus } from '../types/legal';
 import type { UnifiedClientEntry } from '../utils/legalFieldOptions';
 import { formatDateTimeBR } from '../utils/masksAndFormatters';
+import { buildClientTokenUrl } from '../utils/portalUrl';
 
 interface AdminClientsViewProps {
   unifiedEntries: UnifiedClientEntry[];
@@ -46,7 +47,7 @@ export function AdminClientsView({
   }, [unifiedEntries, searchTerm, statusFilter]);
 
   async function handleCopyLink(tokenId: string) {
-    const url = `${window.location.origin}/?token=${encodeURIComponent(tokenId)}`;
+    const url = buildClientTokenUrl(tokenId);
     try {
       await navigator.clipboard.writeText(url);
       setCopiedToken(tokenId);
